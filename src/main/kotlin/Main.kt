@@ -12,8 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -23,7 +21,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,10 +28,8 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPosition.PlatformDefault.x
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
-import java.awt.SystemColor.text
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -109,6 +104,8 @@ fun main(
     }
 }
 
+
+
 @Composable
 @Preview
 fun App(
@@ -117,6 +114,7 @@ fun App(
     pixelsPerDp: Float,
 ) {
     // rootNode.prettyPrint()
+
 
     var primarySelection: ViewNode? by remember { mutableStateOf(null) }
     var secondarySelection: ViewNode? by remember { mutableStateOf(null) }
@@ -177,13 +175,6 @@ fun App(
                         val event = currentEvent.changes.first()
 //                        primarySelection = rootNode.select(event.position.div(scale))
                     }
-//                    .onPointerEvent(PointerEventType.Press) {
-//                        println(currentEvent.changes.first().position)
-//                        val clickedNode = rootNode.select(
-//                            currentEvent.changes.first().position.div(scale)
-//                        )
-//                        primarySelection = clickedNode
-//                    }
             ) {
                 val realSize = size.div(scale)
 
@@ -215,22 +206,6 @@ fun App(
                         primarySelection?.bounds,
                         secondarySelection?.bounds
                     ) { (primaryBounds, secondaryBounds) ->
-//                        drawLine(
-//                            Color.Black,
-//                            primarySelection.bounds.center.times(scale),
-//                            end = secondarySelection.bounds.center.times(scale),
-//                            strokeWidth = 4f
-//                        )
-
-                        // Left guideline
-//                        drawGuideline(
-//                            primaryBounds.topLeft.copy(y = 0f),
-//                            primaryBounds.topLeft.copy(y = realSize.height)
-//                        )
-//                        drawGuideline(
-//                            primaryBounds.topRight.copy(y = 0f),
-//                            primaryBounds.topRight.copy(y = realSize.height)
-//                        )
 
                         println(
                             primaryBounds.bottom
@@ -264,21 +239,6 @@ fun App(
                                     to = Offset(toX, toPoint.y)
                                 )
                             }
-
-//                                if (x < secondaryBounds.left) {
-//                                    // Draw guideline from left of screen to left of s. box
-//                                    drawGuideline(
-//                                        from = Offset(0f, toPoint.y),
-//                                        to = Offset(secondaryBounds.left, toPoint.y)
-//                                    )
-//                                } else {
-//                                    // Draw guideline from right of s.box to right of screen
-//                                    drawGuideline(
-//                                        from = Offset(secondaryBounds.right, toPoint.y),
-//                                        to = Offset(realSize.width, toPoint.y)
-//                                    )
-//                                }
-//                            }
                         }
 
                         val drawnHorizontalLines = drawHorizontalMeasureLines(primaryBounds, secondaryBounds)
@@ -312,34 +272,7 @@ fun App(
                                     to = Offset(fromPoint.x, toY)
                                 )
                             }
-
-
-//                            val y = fromPoint.y
-//                            if (y !in secondaryBounds.top..secondaryBounds.bottom) {
-//                                // The line goes from primary box to secondary box but the line is not touching the
-//                                // secondary box. We must create a helper line
-//                                if (y < secondaryBounds.top) {
-//                                    // Draw guideline from top of screen to top of s. box
-//                                    drawGuideline(
-//                                        from = Offset(toPoint.x, 0f),
-//                                        to = Offset(toPoint.x, secondaryBounds.top)
-//                                    )
-//                                } else {
-//                                    // Draw guideline from bottom of s.box to bottom of screen
-//                                    drawGuideline(
-//                                        from = Offset(toPoint.x, secondaryBounds.bottom),
-//                                        to = Offset(toPoint.x, realSize.height)
-//                                    )
-//                                }
-//                            }
                         }
-
-
-                        //drawMeasureLineUp(primaryBounds, secondaryBounds)
-                        //drawMeasureLineDown(primaryBounds, secondaryBounds)
-                        // Measurements left and right
-                        //drawMeasureLineLeft(primaryBounds, secondaryBounds)
-                        //drawMeasureLineRight(primaryBounds, secondaryBounds)
                     }
                 }
             }
@@ -351,31 +284,19 @@ fun App(
                     .align(Alignment.Center)
             ) {
                 measureLines.forEach { line ->
-
-                    println("Draw tag for line " + line)
                     val center = line.center()
-                    println("Center " + center)
                     val offset = boxSize.toSize() - Size(screenshotBitmap.width * scale, screenshotBitmap.height * scale)
-                    println("Padding " + offset)
-                    println("Offset x ${line.startX.times(scale)}")
 
                     val tag = "%.1f".format(line.distance().div(pixelsPerDp))
                         .replace(".0", "")
                         .plus("dp")
 
-                    val text = tag
-
-
                     Text(
-                        text = text,
+                        text = tag,
                         fontSize = 32.times(scale).sp,
                         modifier = Modifier
                             .layout { measurable, constraints ->
                                 val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
-                                println("Constraints $constraints")
-                                println("Placeable ${placeable.measuredWidth} ${placeable.measuredHeight}")
-                                println("Line center " + line.center())
-                                println("Box width " + boxSize.width)
 
                                 layout(constraints.maxWidth, constraints.maxHeight) {
                                     val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
@@ -385,51 +306,11 @@ fun App(
                                         .coerceAtLeast(-offset.height)
                                         .coerceAtMost(boxSize.height - placeable.measuredHeight.toFloat())
 
-                                    println("Place at $x, $y")
-
                                     placeable.place(x.toInt(), y.toInt())
                                 }
                             }
                             .background(Color.LightGray),
                     )
-
-//                    Text(
-//                        text = text,
-//                        fontSize = 32.times(scale).sp,
-//                        modifier = Modifier
-//                            .offset(
-//                                x = line.startX.times(scale).dp,
-//                                y = line.startY.times(scale).dp
-//                            )
-//                            .background(Color.White),
-//                    )
-
-//                    Box(
-//                        modifier = Modifier
-//                            .width(line.horizontalDistance().times(scale).dp)
-//                            .height(1.dp)
-//                            .offset(
-//                                x = line.startX.times(scale).dp,
-//                                y = line.center().y.times(scale).dp
-//                            )
-//                            .background(Color.Red)
-//                    ) {
-//                        Text(
-//                            text = text,
-//                            fontSize = 32.times(scale).sp,
-//                            modifier = Modifier
-//                                .layout { measurable, constraints ->
-//                                    val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
-//                                    layout(constraints.maxWidth, constraints.maxHeight) {
-//                                        val x = line.center().x - placeable.measuredWidth / 2
-//                                        val y = line.center().y - placeable.measuredHeight / 2
-//
-//                                        placeable.place(x.toInt(), y.toInt())
-//                                    }
-//                                }
-//                                .background(Color.White),
-//                        )
-//                    }
                 }
             }
         }
