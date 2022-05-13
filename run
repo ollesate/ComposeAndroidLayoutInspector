@@ -1,0 +1,5 @@
+#!/bin/bash
+screenshot output/screenshot
+adb shell uiautomator dump
+adb pull /sdcard/window_dump.xml output/
+./gradlew run
