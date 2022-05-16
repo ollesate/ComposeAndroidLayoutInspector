@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalComposeUiApi::class)
+@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalCoroutinesApi::class)
 
 import androidx.compose.material.MaterialTheme
 import androidx.compose.desktop.ui.tooling.preview.Preview
@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,8 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -80,14 +83,14 @@ fun main(
 //        }
 //    }
 
-    val (screenshotPath, xmlDumpPath, pixelsPerDp) = screenDump()
+//    val (screenshotPath, xmlDumpPath, pixelsPerDp) = screenDump()
 
-    val bitmap = File(screenshotPath).toBitmap()
+//    val bitmap = File(screenshotPath).toBitmap()
 
     val initialWindowSize = DpSize(
-        bitmap.width.dp / 2,
-        bitmap.height.dp / 2
-    )
+        1080.dp,
+        1920.dp
+    ).div(2f)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -96,222 +99,339 @@ fun main(
         ),
         undecorated = true,
     ) {
+
+        val content: LayoutContentResult by produceState(LayoutContentResult()) {
+
+            println("combine collect")
+            combine(
+                suspendFlow { kotlin.runCatching { screenshot() } },
+                suspendFlow { kotlin.runCatching { getLayout() } },
+                suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
+            ) { imageBitmap, viewNode, pixelsPerDp ->
+                println("Result $imageBitmap, $pixelsPerDp, $viewNode")
+                value = LayoutContentResult(
+                    screenshotBitmap = imageBitmap,
+                    rootNode = viewNode,
+                    pixelsPerDp = pixelsPerDp,
+                )
+            }.collect()
+
+
+            /*
+
+            value = LayoutContentResult(
+                screenshotBitmap = kotlin.runCatching { screenshot() },
+                rootNode = kotlin.runCatching { getLayout() },
+                pixelsPerDp = kotlin.runCatching { getPixelsPerDp() },
+            )*/
+        }
+
+
+
+        /*GlobalScope.launch {
+            println("combine collect")
+            combine(
+                suspendFlow { kotlin.runCatching { screenshot() } },
+                suspendFlow { kotlin.runCatching { getLayout() } },
+                suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
+            ) { imageBitmap, viewNode, pixelsPerDp ->
+                println("Result $imageBitmap, $viewNode, $pixelsPerDp")
+                LayoutContentResult(
+                    screenshotBitmap = imageBitmap,
+                    rootNode = viewNode,
+                    pixelsPerDp = pixelsPerDp,
+                )
+            }.collect()
+        }*/
+
+//        val coroutineScope = rememberCoroutineScope()
+
+//        fun load() = coroutineScope.launch(Dispatchers.IO) {
+//            val screenshotBitmap = content.screenshotBitmap
+//            val rootNode = content.rootNode
+//            val pixelsPerDp = content.pixelsPerDp
+//            content = LayoutContentResult(
+//                screenshotBitmap = screenshotBitmap ?: kotlin.runCatching { screenshot() },
+//                rootNode = rootNode ?: kotlin.runCatching { getLayout() },
+//                pixelsPerDp = pixelsPerDp ?: kotlin.runCatching { getPixelsPerDp() },
+//            )
+//        }
+//
+//        load()
+
         App(
-            screenshotBitmap = bitmap,
-            rootNode = createRootNode(xmlDumpPath).also(::println),
-            pixelsPerDp = pixelsPerDp
+            content = content,
+            onReloadPressed = {
+                println("No content yet")
+//                load()
+            }
         )
     }
 }
 
 
+fun <T>CoroutineScope.suspendFlow(block: suspend () -> T): Flow<T?> = MutableStateFlow<T?>(null).apply {
+    launch(Dispatchers.IO) {
+        value = block()
+    }
+}
+
+data class LayoutContentResult(
+    val screenshotBitmap: Result<ImageBitmap>? = null,
+    val rootNode: Result<ViewNode>? = null,
+    val pixelsPerDp: Result<Float>? = null,
+)
 
 @Composable
 @Preview
 fun App(
-    screenshotBitmap: ImageBitmap,
-    rootNode: ViewNode,
-    pixelsPerDp: Float,
+    content: LayoutContentResult,
+    onReloadPressed: () -> Unit
 ) {
     // rootNode.prettyPrint()
 
+    val rootNode = content.rootNode?.getOrNull()
+    val screenshotBitmap = content.screenshotBitmap?.getOrNull()
+    val pixelsPerDp = content.pixelsPerDp?.getOrNull()
 
-    var primarySelection: ViewNode? by remember { mutableStateOf(null) }
-    var secondarySelection: ViewNode? by remember { mutableStateOf(null) }
-    var scale: Float by remember { mutableStateOf(0.5f) }
-    var measureLines: List<Line> by remember { mutableStateOf(emptyList()) }
-
-    MaterialTheme {
-        var boxSize: IntSize by remember { mutableStateOf(IntSize(0, 0)) }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .onSizeChanged { size ->
-                    // To keep aspect ratio consistent we'll first get the amount of scaling required to fill the width
-                    // If we use that scaling to scale height we'll check if that makes the view higher than it can be and
-                    // if that's the case we'll use the scaling for height instead.
-                    val widthScale = size.width.toFloat() / screenshotBitmap.width
-                    boxSize = size
-                    scale = widthScale
-                        .takeUnless { screenshotBitmap.height * widthScale > size.height }
-                        ?: (size.height.toFloat() / screenshotBitmap.height)
-                }
-        ) {
-            Image(
-                bitmap = screenshotBitmap,
-                contentDescription = null,
-                modifier = Modifier
-                    .width((screenshotBitmap.width * scale).dp)
-                    .height((screenshotBitmap.height * scale).dp)
-                    .align(Alignment.Center)
-            )
-            Canvas(
-                modifier = Modifier
-                    .width((screenshotBitmap.width * scale).dp)
-                    .height((screenshotBitmap.height * scale).dp)
-                    .align(Alignment.Center)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { position ->
-                                val tappedNode = rootNode.select(position.div(scale))
-                                if (primarySelection == null) {
-                                    primarySelection = tappedNode
-                                } else if (tappedNode == primarySelection) {
-                                    primarySelection = null
-                                    secondarySelection = null
-                                } else {
-                                    secondarySelection = tappedNode
-                                }
-                            },
-                            onLongPress = { position ->
-                                primarySelection = rootNode.select(position.div(scale))
-                                secondarySelection = null
-                            }
-                        )
-                    }
-                    .onPointerEvent(PointerEventType.Move) {
-                        val event = currentEvent.changes.first()
-//                        primarySelection = rootNode.select(event.position.div(scale))
-                    }
-            ) {
-                val realSize = size.div(scale)
-
-                println("realSize $realSize")
-                println("and size $size")
-
-                scaledScope(
-                    scale,
-                    pivot = Offset.Zero
+    MaterialTheme(
+        content = {
+            if (rootNode != null && screenshotBitmap != null && pixelsPerDp != null) {
+                LayoutInspectorView(
+                    screenshotBitmap,
+                    rootNode,
+                    pixelsPerDp
+                )
+            } else {
+                Box(
+                    Modifier.fillMaxSize()
                 ) {
-                    // Draw debug outlines
-                    rootNode.allNodes().forEach {
-                        // drawNodeOutline(it, Color.Red, strokeWidth = 1f)
-                    }
-
-                    primarySelection?.let {
-                        drawNodeOutline(it, Color.Green, strokeWidth = 6f)
-                    }
-
-                    secondarySelection?.let {
-                        drawNodeOutline(it, Color.Blue, strokeWidth = 6f)
-                    }
-
-                    if (secondarySelection == null || primarySelection == null) {
-                        measureLines = emptyList()
-                    }
-
-                    guardNonNull(
-                        primarySelection?.bounds,
-                        secondarySelection?.bounds
-                    ) { (primaryBounds, secondaryBounds) ->
-
-                        println(
-                            primaryBounds.bottom
-                        )
-                        println(
-                            secondaryBounds.top
-                        )
-
-                        // Measurements above and top
-                        val drawnVerticalLines = drawVerticalMeasureLines(primaryBounds, secondaryBounds)
-                        drawnVerticalLines.forEach { (fromPoint, toPoint) ->
-                            val x = fromPoint.x
-                            if (x !in primaryBounds.left..primaryBounds.right) {
-                                val (fromX, toX) = if (x < primaryBounds.left) {
-                                    0f to primaryBounds.left
-                                } else {
-                                    realSize.width to primaryBounds.right
-                                }
-                                drawGuideline(
-                                    from = Offset(fromX, fromPoint.y),
-                                    to = Offset(toX, fromPoint.y)
-                                )
-                            } else if (x !in secondaryBounds.left..secondaryBounds.right) {
-                                val (fromX, toX) = if (x < secondaryBounds.left) {
-                                    0f to secondaryBounds.left
-                                } else {
-                                    realSize.width to secondaryBounds.right
-                                }
-                                drawGuideline(
-                                    from = Offset(fromX, toPoint.y),
-                                    to = Offset(toX, toPoint.y)
-                                )
-                            }
+                    Column(
+                        Modifier.align(Alignment.Center)
+                    ) {
+                        if (content.screenshotBitmap == null || content.rootNode == null || content.pixelsPerDp == null) {
+                            CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
                         }
-
-                        val drawnHorizontalLines = drawHorizontalMeasureLines(primaryBounds, secondaryBounds)
-
-                        println("Horizontal lines ")
-                        println(drawnHorizontalLines)
-
-                        measureLines = drawnHorizontalLines + drawnVerticalLines
-
-
-                        drawnHorizontalLines.forEach { (fromPoint, toPoint) ->
-                            val y = fromPoint.y
-                            if (y !in primaryBounds.top..primaryBounds.bottom) {
-                                val (fromY, toY) = if (y < primaryBounds.top) {
-                                    0f to primaryBounds.top
-                                } else {
-                                    primaryBounds.bottom to realSize.height
-                                }
-                                drawGuideline(
-                                    from = Offset(fromPoint.x, fromY),
-                                    to = Offset(fromPoint.x, toY)
-                                )
-                            } else if (y !in secondaryBounds.top..secondaryBounds.bottom) {
-                                val (fromY, toY) = if (y < secondaryBounds.top) {
-                                    0f to primaryBounds.top
-                                } else {
-                                    primaryBounds.bottom to realSize.height
-                                }
-                                drawGuideline(
-                                    from = Offset(fromPoint.x, fromY),
-                                    to = Offset(fromPoint.x, toY)
-                                )
-                            }
+                        if (content.screenshotBitmap == null) {
+                            Text("Fetching bitmap...")
+                        } else if (content.screenshotBitmap.isFailure) {
+                            Text("Failed to get bitmap")
+                        }
+                        if (content.rootNode == null) {
+                            Text("Fetching layout...")
+                        } else if (content.rootNode.isFailure) {
+                            Text("Failed to get layout")
+                        }
+                        if (content.pixelsPerDp == null) {
+                            Text("Fetching device density...")
+                        } else if (content.pixelsPerDp.isFailure) {
+                            Text("Failed to get density")
                         }
                     }
                 }
             }
+        }
+    )
+}
 
-            Box(
-                modifier = Modifier
-                    .width((screenshotBitmap.width * scale).dp)
-                    .height((screenshotBitmap.height * scale).dp)
-                    .align(Alignment.Center)
-            ) {
-                measureLines.forEach { line ->
-                    val center = line.center()
-                    val offset = boxSize.toSize() - Size(screenshotBitmap.width * scale, screenshotBitmap.height * scale)
-
-                    val tag = "%.1f".format(line.distance().div(pixelsPerDp))
-                        .replace(".0", "")
-                        .plus("dp")
-
-                    Text(
-                        text = tag,
-                        fontSize = 32.times(scale).sp,
-                        modifier = Modifier
-                            .layout { measurable, constraints ->
-                                val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
-
-                                layout(constraints.maxWidth, constraints.maxHeight) {
-                                    val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
-                                        .coerceAtLeast(-offset.width)
-                                        .coerceAtMost(boxSize.width - placeable.measuredWidth.toFloat())
-                                    val y = (line.center().y.times(scale) - placeable.measuredHeight / 2)
-                                        .coerceAtLeast(-offset.height)
-                                        .coerceAtMost(boxSize.height - placeable.measuredHeight.toFloat())
-
-                                    placeable.place(x.toInt(), y.toInt())
-                                }
+@Composable
+private fun LayoutInspectorView(
+    screenshotBitmap: ImageBitmap,
+    rootNode: ViewNode,
+    pixelsPerDp: Float
+) {
+    var primarySelection: ViewNode? by remember { mutableStateOf(null) }
+    var secondarySelection: ViewNode? by remember { mutableStateOf(null) }
+    var scale: Float by remember { mutableStateOf(0.5f) }
+    var measureLines: List<Line> by remember { mutableStateOf(emptyList()) }
+    var boxSize: IntSize by remember { mutableStateOf(IntSize(0, 0)) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onSizeChanged { size ->
+                // To keep aspect ratio consistent we'll first get the amount of scaling required to fill the width
+                // If we use that scaling to scale height we'll check if that makes the view higher than it can be and
+                // if that's the case we'll use the scaling for height instead.
+                val widthScale = size.width.toFloat() / screenshotBitmap.width
+                boxSize = size
+                scale = widthScale
+                    .takeUnless { screenshotBitmap.height * widthScale > size.height }
+                    ?: (size.height.toFloat() / screenshotBitmap.height)
+            }
+    ) {
+        Image(
+            bitmap = screenshotBitmap,
+            contentDescription = null,
+            modifier = Modifier
+                .width((screenshotBitmap.width * scale).dp)
+                .height((screenshotBitmap.height * scale).dp)
+                .align(Alignment.Center)
+        )
+        Canvas(
+            modifier = Modifier
+                .width((screenshotBitmap.width * scale).dp)
+                .height((screenshotBitmap.height * scale).dp)
+                .align(Alignment.Center)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { position ->
+                            val tappedNode = rootNode.select(position.div(scale))
+                            if (primarySelection == null) {
+                                primarySelection = tappedNode
+                            } else if (tappedNode == primarySelection) {
+                                primarySelection = null
+                                secondarySelection = null
+                            } else {
+                                secondarySelection = tappedNode
                             }
-                            .background(Color.LightGray),
+                        },
+                        onLongPress = { position ->
+                            primarySelection = rootNode.select(position.div(scale))
+                            secondarySelection = null
+                        }
                     )
                 }
+                .onPointerEvent(PointerEventType.Move) {
+                    val event = currentEvent.changes.first()
+//                        primarySelection = rootNode.select(event.position.div(scale))
+                }
+        ) {
+            val realSize = size.div(scale)
+
+            println("realSize $realSize")
+            println("and size $size")
+
+            scaledScope(
+                scale,
+                pivot = Offset.Zero
+            ) {
+                // Draw debug outlines
+                rootNode.allNodes().forEach {
+                    // drawNodeOutline(it, Color.Red, strokeWidth = 1f)
+                }
+
+                primarySelection?.let {
+                    drawNodeOutline(it, Color.Green, strokeWidth = 6f)
+                }
+
+                secondarySelection?.let {
+                    drawNodeOutline(it, Color.Blue, strokeWidth = 6f)
+                }
+
+                if (secondarySelection == null || primarySelection == null) {
+                    measureLines = emptyList()
+                }
+
+                guardNonNull(
+                    primarySelection?.bounds,
+                    secondarySelection?.bounds
+                ) { (primaryBounds, secondaryBounds) ->
+
+                    println(
+                        primaryBounds.bottom
+                    )
+                    println(
+                        secondaryBounds.top
+                    )
+
+                    // Measurements above and top
+                    val drawnVerticalLines = drawVerticalMeasureLines(primaryBounds, secondaryBounds)
+                    drawnVerticalLines.forEach { (fromPoint, toPoint) ->
+                        val x = fromPoint.x
+                        if (x !in primaryBounds.left..primaryBounds.right) {
+                            val (fromX, toX) = if (x < primaryBounds.left) {
+                                0f to primaryBounds.left
+                            } else {
+                                realSize.width to primaryBounds.right
+                            }
+                            drawGuideline(
+                                from = Offset(fromX, fromPoint.y),
+                                to = Offset(toX, fromPoint.y)
+                            )
+                        } else if (x !in secondaryBounds.left..secondaryBounds.right) {
+                            val (fromX, toX) = if (x < secondaryBounds.left) {
+                                0f to secondaryBounds.left
+                            } else {
+                                realSize.width to secondaryBounds.right
+                            }
+                            drawGuideline(
+                                from = Offset(fromX, toPoint.y),
+                                to = Offset(toX, toPoint.y)
+                            )
+                        }
+                    }
+
+                    val drawnHorizontalLines = drawHorizontalMeasureLines(primaryBounds, secondaryBounds)
+
+                    println("Horizontal lines ")
+                    println(drawnHorizontalLines)
+
+                    measureLines = drawnHorizontalLines + drawnVerticalLines
+
+
+                    drawnHorizontalLines.forEach { (fromPoint, toPoint) ->
+                        val y = fromPoint.y
+                        if (y !in primaryBounds.top..primaryBounds.bottom) {
+                            val (fromY, toY) = if (y < primaryBounds.top) {
+                                0f to primaryBounds.top
+                            } else {
+                                primaryBounds.bottom to realSize.height
+                            }
+                            drawGuideline(
+                                from = Offset(fromPoint.x, fromY),
+                                to = Offset(fromPoint.x, toY)
+                            )
+                        } else if (y !in secondaryBounds.top..secondaryBounds.bottom) {
+                            val (fromY, toY) = if (y < secondaryBounds.top) {
+                                0f to primaryBounds.top
+                            } else {
+                                primaryBounds.bottom to realSize.height
+                            }
+                            drawGuideline(
+                                from = Offset(fromPoint.x, fromY),
+                                to = Offset(fromPoint.x, toY)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .width((screenshotBitmap.width * scale).dp)
+                .height((screenshotBitmap.height * scale).dp)
+                .align(Alignment.Center)
+        ) {
+            measureLines.forEach { line ->
+                val center = line.center()
+                val offset = boxSize.toSize() - Size(screenshotBitmap.width * scale, screenshotBitmap.height * scale)
+
+                val tag = "%.1f".format(line.distance().div(pixelsPerDp))
+                    .replace(".0", "")
+                    .plus("dp")
+
+                Text(
+                    text = tag,
+                    fontSize = 32.times(scale).sp,
+                    modifier = Modifier
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
+
+                            layout(constraints.maxWidth, constraints.maxHeight) {
+                                val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
+                                    .coerceAtLeast(-offset.width)
+                                    .coerceAtMost(boxSize.width - placeable.measuredWidth.toFloat())
+                                val y = (line.center().y.times(scale) - placeable.measuredHeight / 2)
+                                    .coerceAtLeast(-offset.height)
+                                    .coerceAtMost(boxSize.height - placeable.measuredHeight.toFloat())
+
+                                placeable.place(x.toInt(), y.toInt())
+                            }
+                        }
+                        .background(Color.LightGray),
+                )
             }
         }
     }
