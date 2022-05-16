@@ -2,26 +2,18 @@ import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.*
 import java.io.File
 
-val hardcoded = arrayOf(
-    "/home/olof/projects/ComposeAndroidLayoutInspector/output/screenshot.png",
-    "/home/olof/projects/ComposeAndroidLayoutInspector/output/window_dump.xml"
-)
-
 data class LayoutDump(
     val screenshotPath: String,
     val layoutPath: String,
     val pixelsPerDp: Float
 )
 
-val screenshotPath = "/tmp/screencap.png"
-val layoutDumpPath = "/tmp/window_dump.xml"
+const val SCREENSHOT_PATH = "/tmp/screencap.png"
+const val LAYOUT_DUMP_PATH = "/tmp/window_dump.xml"
 val outputFiles = arrayOf("/tmp/screencap.png", "/tmp/window_dump.xml")
 
-const val adb = "/home/olof/Android/Sdk/platform-tools/adb"
-
-fun main() {
-    screenDump()
-}
+val adb : String
+    get() = System.getenv("ADB") ?: "adb" // Try get adb defined in env or else just hope plain adb will work
 
 fun screenDump(): LayoutDump {
     val (screenshotPath, layoutPath) = outputFiles
@@ -52,20 +44,20 @@ fun screenDump(): LayoutDump {
 suspend fun screenshot(): ImageBitmap {
     println("Taking screenshot")
     withContext(Dispatchers.IO) {
-        "$adb shell screencap -p > $screenshotPath".execute()
+        "$adb shell screencap -p > $SCREENSHOT_PATH".execute()
     }
-    return File(screenshotPath).toBitmap().also {
-        File(screenshotPath).delete()
+    return File(SCREENSHOT_PATH).toBitmap().also {
+        File(SCREENSHOT_PATH).delete()
     }
 }
 
 suspend fun getLayout(): ViewNode {
     println("Dump layout")
     withContext(Dispatchers.IO) {
-        "$adb shell uiautomator dump && adb pull /sdcard/window_dump.xml $layoutDumpPath".execute()
+        "$adb shell uiautomator dump && adb pull /sdcard/window_dump.xml $LAYOUT_DUMP_PATH".execute()
     }
-    return createRootNode(layoutDumpPath).also {
-        File(layoutDumpPath).delete()
+    return createRootNode(LAYOUT_DUMP_PATH).also {
+        File(LAYOUT_DUMP_PATH).delete()
     }
 }
 
