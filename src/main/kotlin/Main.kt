@@ -115,49 +115,7 @@ fun main(
                     pixelsPerDp = pixelsPerDp,
                 )
             }.collect()
-
-
-            /*
-
-            value = LayoutContentResult(
-                screenshotBitmap = kotlin.runCatching { screenshot() },
-                rootNode = kotlin.runCatching { getLayout() },
-                pixelsPerDp = kotlin.runCatching { getPixelsPerDp() },
-            )*/
         }
-
-
-
-        /*GlobalScope.launch {
-            println("combine collect")
-            combine(
-                suspendFlow { kotlin.runCatching { screenshot() } },
-                suspendFlow { kotlin.runCatching { getLayout() } },
-                suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
-            ) { imageBitmap, viewNode, pixelsPerDp ->
-                println("Result $imageBitmap, $viewNode, $pixelsPerDp")
-                LayoutContentResult(
-                    screenshotBitmap = imageBitmap,
-                    rootNode = viewNode,
-                    pixelsPerDp = pixelsPerDp,
-                )
-            }.collect()
-        }*/
-
-//        val coroutineScope = rememberCoroutineScope()
-
-//        fun load() = coroutineScope.launch(Dispatchers.IO) {
-//            val screenshotBitmap = content.screenshotBitmap
-//            val rootNode = content.rootNode
-//            val pixelsPerDp = content.pixelsPerDp
-//            content = LayoutContentResult(
-//                screenshotBitmap = screenshotBitmap ?: kotlin.runCatching { screenshot() },
-//                rootNode = rootNode ?: kotlin.runCatching { getLayout() },
-//                pixelsPerDp = pixelsPerDp ?: kotlin.runCatching { getPixelsPerDp() },
-//            )
-//        }
-//
-//        load()
 
         App(
             content = content,
