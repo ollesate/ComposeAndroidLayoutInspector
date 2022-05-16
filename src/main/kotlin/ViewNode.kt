@@ -8,9 +8,7 @@ data class ViewNode(
     val bounds: Rect,
     val text: String? = null,
     val children: List<ViewNode> = emptyList()
-) {
-
-}
+)
 
 fun ViewNode.prettyPrint() {
     toStringOnNode { level ->

@@ -73,5 +73,5 @@ suspend fun getPixelsPerDp(): Float {
     val adbOutput = withContext(Dispatchers.IO) {
         "$adb shell wm density".execute()
     }
-    return "[0-9]+".toRegex().find(adbOutput)!!.value.toInt().div(160f)
+    return "[0-9]+".toRegex().findAll(adbOutput).last().value.toInt().div(160f)
 }

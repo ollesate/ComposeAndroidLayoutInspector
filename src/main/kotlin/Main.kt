@@ -292,15 +292,8 @@ private fun LayoutInspectorView(
                         }
                     )
                 }
-                .onPointerEvent(PointerEventType.Move) {
-                    val event = currentEvent.changes.first()
-//                        primarySelection = rootNode.select(event.position.div(scale))
-                }
         ) {
             val realSize = size.div(scale)
-
-            println("realSize $realSize")
-            println("and size $size")
 
             scaledScope(
                 scale,
