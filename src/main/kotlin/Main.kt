@@ -22,8 +22,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -33,7 +31,11 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.io.File
+import java.awt.Menu
+import java.awt.MenuBar
+import java.awt.MenuItem
+import java.awt.MenuShortcut
+import java.awt.event.KeyEvent
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -41,6 +43,7 @@ import kotlin.math.min
 fun main(
     args: Array<String>
 ) = application {
+
 
 //    return@application Window(
 //        onCloseRequest = ::exitApplication,
@@ -92,24 +95,51 @@ fun main(
         1920.dp
     ).div(2f)
 
+    val onRefreshSignal = Signal<Unit>()
+
     Window(
         onCloseRequest = ::exitApplication,
         state = WindowState(
             size = initialWindowSize
         ),
-        undecorated = true,
+        title = "Layout inspector"
     ) {
+        var loadContent: () -> Unit = {}
 
-        val content: LayoutContentResult by produceState(LayoutContentResult()) {
+        DisposableEffect(Unit) {
+            window.menuBar = MenuBar().apply {
+                add(
+                    Menu("Commands").apply {
+                        add(
+                            MenuItem("Refresh", MenuShortcut(KeyEvent.VK_R)).apply {
+                                addActionListener {
+                                    onRefreshSignal(Unit)
+                                    loadContent()
+                                }
+                            }
+                        )
+                    }
+                )
+            }
 
-            println("combine collect")
+            onDispose {
+                window.menuBar = null
+            }
+        }
+
+        var content: LayoutContentResult by remember {
+            mutableStateOf(LayoutContentResult())
+        }
+        val scope = rememberCoroutineScope()
+
+        fun load() = scope.launch {
             combine(
                 suspendFlow { kotlin.runCatching { screenshot() } },
                 suspendFlow { kotlin.runCatching { getLayout() } },
                 suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
             ) { imageBitmap, viewNode, pixelsPerDp ->
                 println("Result $imageBitmap, $pixelsPerDp, $viewNode")
-                value = LayoutContentResult(
+                content = LayoutContentResult(
                     screenshotBitmap = imageBitmap,
                     rootNode = viewNode,
                     pixelsPerDp = pixelsPerDp,
@@ -117,12 +147,16 @@ fun main(
             }.collect()
         }
 
+        loadContent = {
+            load()
+        }
+
+        LaunchedEffect(Unit) {
+            load()
+        }
+
         App(
-            content = content,
-            onReloadPressed = {
-                println("No content yet")
-//                load()
-            }
+            content = content
         )
     }
 }
@@ -144,7 +178,6 @@ data class LayoutContentResult(
 @Preview
 fun App(
     content: LayoutContentResult,
-    onReloadPressed: () -> Unit
 ) {
     // rootNode.prettyPrint()
 
