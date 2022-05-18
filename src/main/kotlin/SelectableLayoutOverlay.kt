@@ -156,11 +156,34 @@ fun ImageContainerScope.SelectableLayoutOverlay(
 
     pixelsPerDp ?: return
 
+
     Box(
         modifier = Modifier.matchParentSize()
     ) {
+        // Draw labels for primary box to show how big it is
+        val _primarySelection = primarySelection
+        if (_primarySelection != null && secondarySelection == null) {
+            listOf(
+                _primarySelection.bounds.topCenter to _primarySelection.bounds.width,
+                _primarySelection.bounds.centerLeft to _primarySelection.bounds.height,
+            ).forEach { (labelPosition, measurementSize) ->
+                val sizeText = "%.1f".format(measurementSize.div(pixelsPerDp))
+                    .replace(".0", "")
+                    .plus("dp")
+
+                Text(
+                    text = sizeText,
+                    fontSize = 32.times(scale).coerceAtLeast(12f).sp,
+                    modifier = Modifier
+                        .coerceInside(totalSize, labelPosition.times(scale))
+                        .background(Color.LightGray),
+                )
+            }
+        }
+
+        // Draw labels for lines to show distance
         measureLines.forEach { line ->
-            val offset = totalSize.toSize() - Size(imageSize.width.toFloat(), imageSize.height.toFloat())
+            val position = line.center().times(scale)
 
             val tag = "%.1f".format(line.distance().div(pixelsPerDp))
                 .replace(".0", "")
@@ -168,24 +191,34 @@ fun ImageContainerScope.SelectableLayoutOverlay(
 
             Text(
                 text = tag,
-                fontSize = 32.times(scale).sp,
+                fontSize = 32.times(scale).coerceAtLeast(12f).sp,
                 modifier = Modifier
-                    .layout { measurable, constraints ->
-                        val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
-
-                        layout(constraints.maxWidth, constraints.maxHeight) {
-                            val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
-                                .coerceAtLeast(-offset.width)
-                                .coerceAtMost(totalSize.width - placeable.measuredWidth.toFloat())
-                            val y = (line.center().y.times(scale) - placeable.measuredHeight / 2)
-                                .coerceAtLeast(-offset.height)
-                                .coerceAtMost(totalSize.height - placeable.measuredHeight.toFloat())
-
-                            placeable.place(x.toInt(), y.toInt())
-                        }
-                    }
+                    .coerceInside(totalSize, position)
                     .background(Color.LightGray),
             )
+        }
+    }
+}
+
+// Assuming the inner box is centered inside outer box
+private fun Modifier.coerceInside(
+    outerBound: IntSize,
+    position: Offset
+): Modifier {
+    return layout { measurable, constraints ->
+        val padding = (outerBound.toSize() - Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())) / 2f
+
+        val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
+
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val x = (position.x - placeable.measuredWidth / 2)
+                .coerceAtLeast(-padding.width)
+                .coerceAtMost(outerBound.width - placeable.measuredWidth.toFloat())
+            val y = (position.y - placeable.measuredHeight / 2)
+                .coerceAtLeast(-padding.height)
+                .coerceAtMost(outerBound.height - placeable.measuredHeight.toFloat())
+
+            placeable.place(x.toInt(), y.toInt())
         }
     }
 }
