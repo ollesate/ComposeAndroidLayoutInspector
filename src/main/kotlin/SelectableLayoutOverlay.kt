@@ -2,8 +2,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
@@ -160,12 +163,12 @@ fun ImageContainerScope.SelectableLayoutOverlay(
     Box(
         modifier = Modifier.matchParentSize()
     ) {
-        // Draw labels for primary box to show how big it is
-        val _primarySelection = primarySelection
-        if (_primarySelection != null && secondarySelection == null) {
+        val node = primarySelection
+        if (node != null && secondarySelection == null) {
+            // Draw labels for primary box to show how big it is
             listOf(
-                _primarySelection.bounds.topCenter to _primarySelection.bounds.width,
-                _primarySelection.bounds.centerLeft to _primarySelection.bounds.height,
+                node.bounds.bottomCenter to node.bounds.width,
+                node.bounds.centerLeft to node.bounds.height,
             ).forEach { (labelPosition, measurementSize) ->
                 val sizeText = "%.1f".format(measurementSize.div(pixelsPerDp))
                     .replace(".0", "")
@@ -178,6 +181,25 @@ fun ImageContainerScope.SelectableLayoutOverlay(
                         .coerceInside(totalSize, labelPosition.times(scale))
                         .background(Color.LightGray),
                 )
+            }
+
+            val metadataPosition = node.bounds.topCenter.times(scale)
+            Column(
+                Modifier.centeredAndAbove(metadataPosition).background(Color.LightGray)
+            ) {
+                Text(
+                    text = node.humanReadableClassName,
+                    fontSize = 18.times(scale).coerceAtLeast(14f).sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                node.humanReadableResourceId.takeUnless { it.isBlank() }?.let {
+                    Text(
+                        text = it,
+                        fontSize = 18.times(scale).coerceAtLeast(12f).sp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
             }
         }
 
@@ -197,6 +219,18 @@ fun ImageContainerScope.SelectableLayoutOverlay(
                     .background(Color.LightGray),
             )
         }
+    }
+}
+
+private fun Modifier.centeredAndAbove(
+    position: Offset
+) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
+
+    layout(constraints.maxWidth, constraints.maxHeight) {
+        val centerX = (position.x - placeable.measuredWidth / 2)
+        val aboveY = (position.y - placeable.measuredHeight)
+        placeable.place(centerX.toInt(), aboveY.toInt())
     }
 }
 

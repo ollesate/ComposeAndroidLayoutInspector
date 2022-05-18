@@ -10,6 +10,14 @@ data class ViewNode(
     val children: List<ViewNode> = emptyList()
 )
 
+val ViewNode.humanReadableClassName: String
+    get() = className
+        .replace("android.widget.", "")
+        .replace("android.view.", "")
+
+val ViewNode.humanReadableResourceId: String
+    get() = resourceId.substringAfter("/")
+
 fun ViewNode.prettyPrint() {
     toStringOnNode { level ->
         val padLeft = (0 until level).joinToString(separator = "") { " " }
