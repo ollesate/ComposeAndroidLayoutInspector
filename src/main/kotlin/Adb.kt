@@ -67,3 +67,17 @@ suspend fun getPixelsPerDp(): Float {
     }
     return "[0-9]+".toRegex().findAll(adbOutput).last().value.toInt().div(160f)
 }
+
+
+data class Devices(
+    val name: String
+)
+
+fun devices() = "adb devices".execute()
+    .substringAfter("List of devices attached")
+    .trim()
+    .split("\n")
+    .map { it.split("\t") }
+    .map { (name, _) ->
+        Devices(name = name)
+    }

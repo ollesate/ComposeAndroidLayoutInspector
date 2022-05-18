@@ -61,7 +61,6 @@ fun main(
                 suspendFlow { kotlin.runCatching { getLayout() } },
                 suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
             ) { imageBitmap, viewNode, pixelsPerDp ->
-                println(imageBitmap)
                 content = LayoutContentResult(
                     screenshotBitmap = imageBitmap,
                     rootNode = viewNode,
