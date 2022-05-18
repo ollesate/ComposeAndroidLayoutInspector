@@ -8,7 +8,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -22,6 +27,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -31,6 +38,7 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.jetbrains.skia.Bitmap
 import java.awt.Menu
 import java.awt.MenuBar
 import java.awt.MenuItem
@@ -102,30 +110,15 @@ fun main(
         state = WindowState(
             size = initialWindowSize
         ),
-        title = "Layout inspector"
+        title = "Layout inspector",
+        onKeyEvent = {
+            if (it.isCtrlPressed && it.key == Key.R && it.type == KeyEventType.KeyUp) {
+                onRefreshSignal(Unit)
+            }
+            true
+        }
     ) {
         var loadContent: () -> Unit = {}
-
-        DisposableEffect(Unit) {
-            window.menuBar = MenuBar().apply {
-                add(
-                    Menu("Commands").apply {
-                        add(
-                            MenuItem("Refresh", MenuShortcut(KeyEvent.VK_R)).apply {
-                                addActionListener {
-                                    onRefreshSignal(Unit)
-                                    loadContent()
-                                }
-                            }
-                        )
-                    }
-                )
-            }
-
-            onDispose {
-                window.menuBar = null
-            }
-        }
 
         var content: LayoutContentResult by remember {
             mutableStateOf(LayoutContentResult())
@@ -138,7 +131,6 @@ fun main(
                 suspendFlow { kotlin.runCatching { getLayout() } },
                 suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
             ) { imageBitmap, viewNode, pixelsPerDp ->
-                println("Result $imageBitmap, $pixelsPerDp, $viewNode")
                 content = LayoutContentResult(
                     screenshotBitmap = imageBitmap,
                     rootNode = viewNode,
@@ -147,11 +139,10 @@ fun main(
             }.collect()
         }
 
-        loadContent = {
-            load()
-        }
-
         LaunchedEffect(Unit) {
+            onRefreshSignal {
+                load()
+            }
             load()
         }
 
@@ -181,6 +172,63 @@ fun App(
 ) {
     // rootNode.prettyPrint()
 
+    MaterialTheme (
+        content = {
+            ImageContainerView(
+                bitmap = content.screenshotBitmap?.getOrNull(),
+            ) {
+
+                val rootNode = content.rootNode?.getOrNull()
+                val screenshotBitmap = content.screenshotBitmap?.getOrNull()
+                val pixelsPerDp = content.pixelsPerDp?.getOrNull()
+
+                if (rootNode != null && screenshotBitmap != null && pixelsPerDp != null) {
+                    SelectableLayoutOverlay(
+                        realImageSize = IntSize(screenshotBitmap.width, screenshotBitmap.height),
+                        rootNode = rootNode,
+                        pixelsPerDp = pixelsPerDp
+                    )
+                } else {
+                    Box(Modifier.matchParentSize().background(Color.White.copy(alpha = 0.3f))) {
+                        Column(
+                            Modifier
+                                .align(Alignment.Center)
+                                .background(Color.Black.copy(alpha = 0.7f))
+                                .padding(16.dp)
+                        ) {
+                            listOf(
+                                content.screenshotBitmap to "Screenshot",
+                                content.rootNode to "Layout",
+                                content.pixelsPerDp to "Device metadata",
+                            ).forEach { (result, description) ->
+                                Row(
+                                    Modifier.height(30.dp)
+                                ) {
+                                    Text(
+                                        "$description: ",
+                                        color = Color.White
+                                    )
+                                    if (result == null) {
+                                        CircularProgressIndicator(
+                                            Modifier.width(20.dp),
+                                            color = Color.Yellow.copy(alpha = 0.8f)
+                                        )
+                                    } else if (result.isFailure) {
+                                        Icon(Icons.Outlined.Close, null, tint = Color.Red)
+                                    } else {
+                                        Icon(Icons.Outlined.Check, null, tint = Color.Green)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    return
+
     val rootNode = content.rootNode?.getOrNull()
     val screenshotBitmap = content.screenshotBitmap?.getOrNull()
     val pixelsPerDp = content.pixelsPerDp?.getOrNull()
@@ -197,32 +245,143 @@ fun App(
                 Box(
                     Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        Modifier.align(Alignment.Center)
-                    ) {
-                        if (content.screenshotBitmap == null || content.rootNode == null || content.pixelsPerDp == null) {
-                            CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
-                        }
-                        if (content.screenshotBitmap == null) {
-                            Text("Fetching bitmap...")
-                        } else if (content.screenshotBitmap.isFailure) {
-                            Text("Failed to get bitmap")
-                        }
-                        if (content.rootNode == null) {
-                            Text("Fetching layout...")
-                        } else if (content.rootNode.isFailure) {
-                            Text("Failed to get layout")
-                        }
-                        if (content.pixelsPerDp == null) {
-                            Text("Fetching device density...")
-                        } else if (content.pixelsPerDp.isFailure) {
-                            Text("Failed to get density")
-                        }
-                    }
+
                 }
             }
         }
     )
+}
+
+//private fun LayoutContentResult.loadingOverlay() = Column(
+//    Modifier.align(Alignment.Center)
+//) {
+//    if (content.screenshotBitmap == null || content.rootNode == null || content.pixelsPerDp == null) {
+//        CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+//    }
+//    if (content.screenshotBitmap == null) {
+//        Text("Fetching bitmap...")
+//    } else if (content.screenshotBitmap.isFailure) {
+//        Text("Failed to get bitmap")
+//    }
+//    if (content.rootNode == null) {
+//        Text("Fetching layout...")
+//    } else if (content.rootNode.isFailure) {
+//        Text("Failed to get layout")
+//    }
+//    if (content.pixelsPerDp == null) {
+//        Text("Fetching device density...")
+//    } else if (content.pixelsPerDp.isFailure) {
+//        Text("Failed to get density")
+//    }
+//}
+
+@LayoutScopeMarker
+@Immutable
+interface ImageContainerScope: BoxScope {
+    val contentSize: IntSize?
+    val totalSize: IntSize?
+}
+
+class ImageContainerScopeInstance(
+    override val contentSize: IntSize?,
+    override val totalSize: IntSize?,
+    private val boxScope: BoxScope
+) : ImageContainerScope, BoxScope by boxScope
+
+@Composable
+fun ImageContainerView(
+    bitmap: ImageBitmap?,
+    content: @Composable ImageContainerScope.() -> Unit
+) {
+    var contentSize: IntSize? by remember { mutableStateOf(null) }
+    var totalSize: IntSize? by remember { mutableStateOf(null) }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).onSizeChanged { totalSize = it }
+    ) {
+
+        Box(
+            Modifier.align(Alignment.Center).onSizeChanged { contentSize = it }
+        ) {
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                )
+            }
+
+            Box(
+                modifier = Modifier.matchParentSize().takeUnless { bitmap == null } ?: Modifier.fillMaxSize()
+            ) {
+                ImageContainerScopeInstance(
+                    contentSize = contentSize,
+                    totalSize = totalSize,
+                    boxScope = this
+                ).content()
+            }
+        }
+
+
+//
+//        if (bitmap != null) {
+//            Image(
+//                bitmap = bitmap,
+//                modifier = Modifier
+//                    .align(Alignment.Center)
+//                    .onSizeChanged {
+//                        contentSize = it
+//                    },
+//                contentDescription = null,
+//            )
+//        }
+//
+//        Box(
+//            Modifier
+//                .then(
+//                    contentSize?.let { Modifier.size(it.width.dp, it.height.dp) }
+//                        ?: Modifier.fillMaxSize()
+//                )
+//                .align(Alignment.Center)
+//        ) {
+//            content()
+//        }
+    }
+}
+
+@LayoutScopeMarker
+@Immutable
+interface CenteredContainerScope {
+    val contentScale: Float
+}
+
+class CenteredContentContainerScopeInstance(
+    override val contentScale: Float
+) : CenteredContainerScope
+
+@Composable
+private fun CenteredContentContainer(
+    contentSize: IntSize?,
+    content: @Composable CenteredContentContainerScopeInstance.() -> Unit
+) {
+    var scale: Float by remember { mutableStateOf(1f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onSizeChanged { size ->
+                contentSize ?: return@onSizeChanged
+                // To keep aspect ratio consistent we'll first get the amount of scaling required to fill the width
+                // If we use that scaling to scale height we'll check if that makes the view higher than it can be and
+                // if that's the case we'll use the scaling for height instead.
+                val widthScale = size.width.toFloat() / contentSize.width
+                scale = widthScale
+                    .takeUnless { contentSize.height * widthScale > size.height }
+                    ?: (size.height.toFloat() / contentSize.height)
+            }
+    ) {
+        CenteredContentContainerScopeInstance(scale).content()
+    }
 }
 
 @Composable
@@ -312,13 +471,6 @@ private fun LayoutInspectorView(
                     secondarySelection?.bounds
                 ) { (primaryBounds, secondaryBounds) ->
 
-                    println(
-                        primaryBounds.bottom
-                    )
-                    println(
-                        secondaryBounds.top
-                    )
-
                     // Measurements above and top
                     val drawnVerticalLines = drawVerticalMeasureLines(primaryBounds, secondaryBounds)
                     drawnVerticalLines.forEach { (fromPoint, toPoint) ->
@@ -347,9 +499,6 @@ private fun LayoutInspectorView(
                     }
 
                     val drawnHorizontalLines = drawHorizontalMeasureLines(primaryBounds, secondaryBounds)
-
-                    println("Horizontal lines ")
-                    println(drawnHorizontalLines)
 
                     measureLines = drawnHorizontalLines + drawnVerticalLines
 
@@ -421,6 +570,186 @@ private fun LayoutInspectorView(
     }
 }
 
+@Composable
+fun ImageContainerScope.SelectableLayoutOverlay(
+    realImageSize: IntSize,
+    rootNode: ViewNode,
+    pixelsPerDp: Float?
+) {
+
+
+
+    var primarySelection: ViewNode? by remember { mutableStateOf(null) }
+    var secondarySelection: ViewNode? by remember { mutableStateOf(null) }
+    var measureLines: List<Line> by remember { mutableStateOf(emptyList()) }
+
+    val boxSize = totalSize ?: return
+    val screenshotBitmap = contentSize ?: return
+    val scale = realImageSize.scaleToFitIn(screenshotBitmap)
+
+    Canvas(
+        modifier = Modifier
+            .matchParentSize()
+            .pointerInput(scale) {
+                detectTapGestures(
+                    onTap = { position ->
+                        val tappedNode = rootNode.select(position.div(scale))
+                        println("Selected node ${Offset(tappedNode.bounds.top, tappedNode.bounds.left)}")
+                        if (primarySelection == null) {
+                            primarySelection = tappedNode
+                        } else if (tappedNode == primarySelection) {
+                            primarySelection = null
+                            secondarySelection = null
+                        } else {
+                            secondarySelection = tappedNode
+                        }
+                    },
+                    onLongPress = { position ->
+                        primarySelection = rootNode.select(position.div(scale))
+                        secondarySelection = null
+                    }
+                )
+            }
+    ) {
+        val realSize = size.div(scale)
+
+        scaledScope(
+            scale,
+            pivot = Offset.Zero
+        ) {
+            // Draw debug outlines
+            rootNode.allNodes().forEach {
+                // drawNodeOutline(it, Color.Red, strokeWidth = 1f)
+            }
+
+            primarySelection?.let {
+                drawNodeOutline(it, Color.Green, strokeWidth = 6f)
+            }
+
+            secondarySelection?.let {
+                drawNodeOutline(it, Color.Blue, strokeWidth = 6f)
+            }
+
+            if (secondarySelection == null || primarySelection == null) {
+                measureLines = emptyList()
+            }
+
+            guardNonNull(
+                primarySelection?.bounds,
+                secondarySelection?.bounds
+            ) { (primaryBounds, secondaryBounds) ->
+
+                println(
+                    primaryBounds.bottom
+                )
+                println(
+                    secondaryBounds.top
+                )
+
+                // Measurements above and top
+                val drawnVerticalLines = drawVerticalMeasureLines(primaryBounds, secondaryBounds)
+                drawnVerticalLines.forEach { (fromPoint, toPoint) ->
+                    val x = fromPoint.x
+                    if (x !in primaryBounds.left..primaryBounds.right) {
+                        val (fromX, toX) = if (x < primaryBounds.left) {
+                            0f to primaryBounds.left
+                        } else {
+                            realSize.width to primaryBounds.right
+                        }
+                        drawGuideline(
+                            from = Offset(fromX, fromPoint.y),
+                            to = Offset(toX, fromPoint.y)
+                        )
+                    } else if (x !in secondaryBounds.left..secondaryBounds.right) {
+                        val (fromX, toX) = if (x < secondaryBounds.left) {
+                            0f to secondaryBounds.left
+                        } else {
+                            realSize.width to secondaryBounds.right
+                        }
+                        drawGuideline(
+                            from = Offset(fromX, toPoint.y),
+                            to = Offset(toX, toPoint.y)
+                        )
+                    }
+                }
+
+                val drawnHorizontalLines = drawHorizontalMeasureLines(primaryBounds, secondaryBounds)
+
+                measureLines = drawnHorizontalLines + drawnVerticalLines
+
+                drawnHorizontalLines.forEach { (fromPoint, toPoint) ->
+                    val y = fromPoint.y
+                    if (y !in primaryBounds.top..primaryBounds.bottom) {
+                        val (fromY, toY) = if (y < primaryBounds.top) {
+                            0f to primaryBounds.top
+                        } else {
+                            primaryBounds.bottom to realSize.height
+                        }
+                        drawGuideline(
+                            from = Offset(fromPoint.x, fromY),
+                            to = Offset(fromPoint.x, toY)
+                        )
+                    } else if (y !in secondaryBounds.top..secondaryBounds.bottom) {
+                        val (fromY, toY) = if (y < secondaryBounds.top) {
+                            0f to primaryBounds.top
+                        } else {
+                            primaryBounds.bottom to realSize.height
+                        }
+                        drawGuideline(
+                            from = Offset(fromPoint.x, fromY),
+                            to = Offset(fromPoint.x, toY)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    pixelsPerDp ?: return
+
+    Box(
+        modifier = Modifier.matchParentSize()
+    ) {
+        measureLines.forEach { line ->
+            val center = line.center()
+            val offset = boxSize.toSize() - Size(screenshotBitmap.width * scale, screenshotBitmap.height * scale)
+
+            val tag = "%.1f".format(line.distance().div(pixelsPerDp))
+                .replace(".0", "")
+                .plus("dp")
+
+            Text(
+                text = tag,
+                fontSize = 32.times(scale).sp,
+                modifier = Modifier
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
+
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
+                                .coerceAtLeast(-offset.width)
+                                .coerceAtMost(boxSize.width - placeable.measuredWidth.toFloat())
+                            val y = (line.center().y.times(scale) - placeable.measuredHeight / 2)
+                                .coerceAtLeast(-offset.height)
+                                .coerceAtMost(boxSize.height - placeable.measuredHeight.toFloat())
+
+                            placeable.place(x.toInt(), y.toInt())
+                        }
+                    }
+                    .background(Color.LightGray),
+            )
+        }
+    }
+}
+
+private fun IntSize.scaleToFitIn(totalSize: IntSize): Float {
+    val contentSize = this
+    val widthScale = totalSize.width.toFloat() / contentSize.width
+    return widthScale
+        .takeUnless { contentSize.height * widthScale > totalSize.height }
+        ?: (totalSize.height.toFloat() / contentSize.height)
+}
+
 private operator fun Size.minus(size: Size): Size {
     return Size(width - size.width, height - size.height)
 }
@@ -439,7 +768,7 @@ private fun ScaledDrawScope.drawVerticalMeasureLines(
         primaryBounds.topCenter to secondaryBounds.bottomCenter, // Primary box is below
         primaryBounds.bottomCenter to secondaryBounds.topCenter, // Secondary box is below
         primaryBounds.bottomCenter to secondaryBounds.bottomCenter, // Boxes are inside each other
-    ).also(::println).forEach { currentLine: Line ->
+    ).forEach { currentLine: Line ->
         val otherIntersectingLine = lines.firstOrNull { currentLine.intersects(it) }
         if (otherIntersectingLine == null) {
             // Found no collision, add it to the list.
@@ -486,7 +815,7 @@ private fun ScaledDrawScope.drawHorizontalMeasureLines(
         primaryBounds.centerLeft to secondaryBounds.centerRight, // Primary box is to right
         primaryBounds.centerRight to secondaryBounds.centerLeft, // Secondary box is to right
         primaryBounds.centerRight to secondaryBounds.centerRight, // Boxes are inside each other
-    ).also(::println).forEachIndexed { index, currentLine: Line ->
+    ).forEachIndexed { index, currentLine: Line ->
         val otherIntersectingLine = lines.firstOrNull { currentLine.intersects(it) }
         if (otherIntersectingLine == null) {
             // Found no collision, add it to the list.
