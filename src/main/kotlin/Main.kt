@@ -61,6 +61,7 @@ fun main(
                 suspendFlow { kotlin.runCatching { getLayout() } },
                 suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
             ) { imageBitmap, viewNode, pixelsPerDp ->
+                println(imageBitmap)
                 content = LayoutContentResult(
                     screenshotBitmap = imageBitmap,
                     rootNode = viewNode,
@@ -140,9 +141,9 @@ private fun BoxScope.loadingView(content: LayoutContentResult) {
                 content.rootNode to "Layout",
                 content.pixelsPerDp to "Device metadata",
             ).forEach { (result, description) ->
-                Row(
-                    Modifier.height(30.dp)
-                ) {
+                Spacer(Modifier.height(16.dp))
+
+                Row(Modifier.height(24.dp)) {
                     Text(
                         "$description: ",
                         color = Color.White
@@ -158,6 +159,17 @@ private fun BoxScope.loadingView(content: LayoutContentResult) {
                         Icon(Icons.Outlined.Check, null, tint = Color.Green)
                     }
                 }
+
+                if (result?.isFailure == true) {
+                    Text(
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+                        text = result.exceptionOrNull()?.message.orEmpty(),
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

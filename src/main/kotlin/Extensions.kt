@@ -14,11 +14,12 @@ val Size.area: Float
 
 fun String.execute(): String {
     println(this)
-    return ProcessBuilder(
-        "sh",
-        "-c",
-        this
-    ).start().inputStream.reader().readText().also(::println)
+    val process = ProcessBuilder("sh", "-c", this).start()
+    val errorText = process.errorStream.reader().readText().trim().also(::println)
+    if (errorText.isNotEmpty()) {
+        error(errorText)
+    }
+    return process.inputStream.reader().readText().trim().also(::println)
 }
 
 fun String.execute2(): String {
