@@ -35,7 +35,7 @@ fun main(
 ) = application {
 
     runBlocking {
-        devices().first().select()
+        println(devices())
     }
 
     val initialWindowSize = DpSize(
@@ -87,7 +87,7 @@ fun main(
         LaunchedEffect(Unit) {
             val loadedDevices = devices()
             devices = loadedDevices
-            selectedDevice = loadedDevices.first()
+            selectedDevice = loadedDevices.firstOrNull()
             onRefreshSignal {
                 refresh()
             }
@@ -149,14 +149,12 @@ fun App(
                     loadingView(content)
                 }
 
+                devices ?: return@ImageContainerView
+
                 Row(
                     Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min).alpha(0.7f)
                 ) {
-                    devices ?: return@Row
-
-                    if (devices.isEmpty()) {
-                        Text("No devices found")
-                    } else {
+                    if (devices.isNotEmpty()) {
                         devices.forEachIndexed { index, device ->
                             if (index > 0) {
                                 Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))

@@ -77,6 +77,7 @@ suspend fun devices() = "adb devices".execute()
     .substringAfter("List of devices attached")
     .trim()
     .split("\n")
+    .filterNot { it.isEmpty() }
     .map { it.split("\t") }
     .map { (name, _) ->
         Device(name = name)
