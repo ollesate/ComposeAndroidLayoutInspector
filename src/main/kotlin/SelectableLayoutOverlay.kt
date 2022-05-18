@@ -32,9 +32,9 @@ fun ImageContainerScope.SelectableLayoutOverlay(
     var secondarySelection: ViewNode? by remember { mutableStateOf(null) }
     var measureLines: List<Line> by remember { mutableStateOf(emptyList()) }
 
-    val boxSize = totalSize ?: return
-    val screenshotBitmap = contentSize ?: return
-    val scale = realImageSize.scaleToFitIn(screenshotBitmap)
+    val totalSize = totalSize ?: return
+    val imageSize = contentSize ?: return
+    val scale = realImageSize.scaleToFitIn(imageSize)
 
     Canvas(
         modifier = Modifier
@@ -160,8 +160,7 @@ fun ImageContainerScope.SelectableLayoutOverlay(
         modifier = Modifier.matchParentSize()
     ) {
         measureLines.forEach { line ->
-            val center = line.center()
-            val offset = boxSize.toSize() - Size(screenshotBitmap.width * scale, screenshotBitmap.height * scale)
+            val offset = totalSize.toSize() - Size(imageSize.width.toFloat(), imageSize.height.toFloat())
 
             val tag = "%.1f".format(line.distance().div(pixelsPerDp))
                 .replace(".0", "")
@@ -177,10 +176,10 @@ fun ImageContainerScope.SelectableLayoutOverlay(
                         layout(constraints.maxWidth, constraints.maxHeight) {
                             val x = (line.center().x.times(scale) - placeable.measuredWidth / 2)
                                 .coerceAtLeast(-offset.width)
-                                .coerceAtMost(boxSize.width - placeable.measuredWidth.toFloat())
+                                .coerceAtMost(totalSize.width - placeable.measuredWidth.toFloat())
                             val y = (line.center().y.times(scale) - placeable.measuredHeight / 2)
                                 .coerceAtLeast(-offset.height)
-                                .coerceAtMost(boxSize.height - placeable.measuredHeight.toFloat())
+                                .coerceAtMost(totalSize.height - placeable.measuredHeight.toFloat())
 
                             placeable.place(x.toInt(), y.toInt())
                         }

@@ -39,7 +39,7 @@ fun main(
     }
 
     val initialWindowSize = DpSize(
-        1080.dp,
+        1000.dp,
         1920.dp
     ).div(2f)
 
