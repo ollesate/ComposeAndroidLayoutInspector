@@ -87,7 +87,7 @@ fun main(
         LaunchedEffect(Unit) {
             val loadedDevices = devices()
             devices = loadedDevices
-            selectedDevice = loadedDevices.firstOrNull()
+            selectedDevice = loadedDevices.firstOrNull()?.also { it.select() }
             onRefreshSignal {
                 refresh()
             }
