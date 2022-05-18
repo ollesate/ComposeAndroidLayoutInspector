@@ -133,43 +133,48 @@ fun App(
                         pixelsPerDp = pixelsPerDp
                     )
                 } else {
-                    Box(Modifier.matchParentSize().background(Color.White.copy(alpha = 0.3f))) {
-                        Column(
-                            Modifier
-                                .align(Alignment.Center)
-                                .background(Color.Black.copy(alpha = 0.7f))
-                                .padding(16.dp)
-                        ) {
-                            listOf(
-                                content.screenshotBitmap to "Screenshot",
-                                content.rootNode to "Layout",
-                                content.pixelsPerDp to "Device metadata",
-                            ).forEach { (result, description) ->
-                                Row(
-                                    Modifier.height(30.dp)
-                                ) {
-                                    Text(
-                                        "$description: ",
-                                        color = Color.White
-                                    )
-                                    if (result == null) {
-                                        CircularProgressIndicator(
-                                            Modifier.width(20.dp),
-                                            color = Color.Yellow.copy(alpha = 0.8f)
-                                        )
-                                    } else if (result.isFailure) {
-                                        Icon(Icons.Outlined.Close, null, tint = Color.Red)
-                                    } else {
-                                        Icon(Icons.Outlined.Check, null, tint = Color.Green)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    loadingView(content)
                 }
             }
         }
     )
+}
+
+@Composable
+private fun BoxScope.loadingView(content: LayoutContentResult) {
+    Box(Modifier.matchParentSize().background(Color.White.copy(alpha = 0.3f))) {
+        Column(
+            Modifier
+                .align(Alignment.Center)
+                .background(Color.Black.copy(alpha = 0.7f))
+                .padding(16.dp)
+        ) {
+            listOf(
+                content.screenshotBitmap to "Screenshot",
+                content.rootNode to "Layout",
+                content.pixelsPerDp to "Device metadata",
+            ).forEach { (result, description) ->
+                Row(
+                    Modifier.height(30.dp)
+                ) {
+                    Text(
+                        "$description: ",
+                        color = Color.White
+                    )
+                    if (result == null) {
+                        CircularProgressIndicator(
+                            Modifier.width(20.dp),
+                            color = Color.Yellow.copy(alpha = 0.8f)
+                        )
+                    } else if (result.isFailure) {
+                        Icon(Icons.Outlined.Close, null, tint = Color.Red)
+                    } else {
+                        Icon(Icons.Outlined.Check, null, tint = Color.Green)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @LayoutScopeMarker
@@ -217,42 +222,6 @@ fun ImageContainerView(
                 ).content()
             }
         }
-    }
-}
-
-@LayoutScopeMarker
-@Immutable
-interface CenteredContainerScope {
-    val contentScale: Float
-}
-
-class CenteredContentContainerScopeInstance(
-    override val contentScale: Float
-) : CenteredContainerScope
-
-@Composable
-private fun CenteredContentContainer(
-    contentSize: IntSize?,
-    content: @Composable CenteredContentContainerScopeInstance.() -> Unit
-) {
-    var scale: Float by remember { mutableStateOf(1f) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .onSizeChanged { size ->
-                contentSize ?: return@onSizeChanged
-                // To keep aspect ratio consistent we'll first get the amount of scaling required to fill the width
-                // If we use that scaling to scale height we'll check if that makes the view higher than it can be and
-                // if that's the case we'll use the scaling for height instead.
-                val widthScale = size.width.toFloat() / contentSize.width
-                scale = widthScale
-                    .takeUnless { contentSize.height * widthScale > size.height }
-                    ?: (size.height.toFloat() / contentSize.height)
-            }
-    ) {
-        CenteredContentContainerScopeInstance(scale).content()
     }
 }
 
