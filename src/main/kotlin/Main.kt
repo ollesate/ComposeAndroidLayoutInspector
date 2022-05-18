@@ -4,7 +4,9 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -15,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.*
@@ -29,6 +33,10 @@ import kotlinx.coroutines.flow.*
 fun main(
     args: Array<String>
 ) = application {
+
+    runBlocking {
+        devices().first().select()
+    }
 
     val initialWindowSize = DpSize(
         1080.dp,
@@ -53,9 +61,16 @@ fun main(
         var content: LayoutContentResult by remember {
             mutableStateOf(LayoutContentResult())
         }
+
+        var devices: List<Device>? by remember { mutableStateOf(null) }
+
+        var selectedDevice: Device? by remember {
+            mutableStateOf(null)
+        }
+
         val scope = rememberCoroutineScope()
 
-        fun load() = scope.launch {
+        fun refresh() = scope.launch {
             combine(
                 suspendFlow { kotlin.runCatching { screenshot() } },
                 suspendFlow { kotlin.runCatching { getLayout() } },
@@ -70,18 +85,27 @@ fun main(
         }
 
         LaunchedEffect(Unit) {
+            val loadedDevices = devices()
+            devices = loadedDevices
+            selectedDevice = loadedDevices.first()
             onRefreshSignal {
-                load()
+                refresh()
             }
-            load()
+            refresh()
         }
 
         App(
-            content = content
+            content = content,
+            devices = devices,
+            selectedDevice = selectedDevice,
+            onDeviceSelected = {
+                selectedDevice = it
+                it.select()
+                refresh()
+            }
         )
     }
 }
-
 
 fun <T>CoroutineScope.suspendFlow(block: suspend () -> T): Flow<T?> = MutableStateFlow<T?>(null).apply {
     launch(Dispatchers.IO) {
@@ -99,6 +123,9 @@ data class LayoutContentResult(
 @Preview
 fun App(
     content: LayoutContentResult,
+    devices: List<Device>?,
+    selectedDevice: Device?,
+    onDeviceSelected: (Device) -> Unit
 ) {
     // rootNode.prettyPrint()
 
@@ -120,6 +147,44 @@ fun App(
                     )
                 } else {
                     loadingView(content)
+                }
+
+                Row(
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min).alpha(0.7f)
+                ) {
+                    devices ?: return@Row
+
+                    if (devices.isEmpty()) {
+                        Text("No devices found")
+                    } else {
+                        devices.forEachIndexed { index, device ->
+                            if (index > 0) {
+                                Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))
+                            }
+
+                            Text(
+                                text = device.name,
+                                modifier = Modifier
+                                    .clip(
+                                        if (devices.size == 1) {
+                                            RoundedCornerShape(16.dp)
+                                        } else {
+                                            when (index) {
+                                                0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+                                                devices.lastIndex -> RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                                                else -> RoundedCornerShape(0.dp)
+                                            }
+                                        }
+                                    )
+                                    .background(Color.Blue.takeIf { selectedDevice == device } ?: Color.Black)
+                                    .padding(6.dp)
+                                    .clickable {
+                                        onDeviceSelected(device)
+                                    },
+                                color = Color.White,
+                            )
+                        }
+                    }
                 }
             }
         }

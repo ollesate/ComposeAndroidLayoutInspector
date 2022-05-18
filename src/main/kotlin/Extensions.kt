@@ -12,9 +12,13 @@ fun String.findMatches(regex: String) = regex.toRegex()
 val Size.area: Float
     get() = width * height
 
+val overrideEnvironment = mutableMapOf<String, String>()
+
 fun String.execute(): String {
     println(this)
-    val process = ProcessBuilder("sh", "-c", this).start()
+    val process = ProcessBuilder("sh", "-c", this).apply {
+        environment().putAll(overrideEnvironment)
+    }.start()
     val errorText = process.errorStream.reader().readText().trim().also(::println)
     if (errorText.isNotEmpty()) {
         error(errorText)

@@ -69,15 +69,17 @@ suspend fun getPixelsPerDp(): Float {
 }
 
 
-data class Devices(
+data class Device(
     val name: String
 )
 
-fun devices() = "adb devices".execute()
+suspend fun devices() = "adb devices".execute()
     .substringAfter("List of devices attached")
     .trim()
     .split("\n")
     .map { it.split("\t") }
     .map { (name, _) ->
-        Devices(name = name)
+        Device(name = name)
     }
+
+fun Device.select() = overrideEnvironment.put("ANDROID_SERIAL", name)
