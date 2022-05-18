@@ -91,13 +91,6 @@ fun ImageContainerScope.SelectableLayoutOverlay(
                 secondarySelection?.bounds
             ) { (primaryBounds, secondaryBounds) ->
 
-                println(
-                    primaryBounds.bottom
-                )
-                println(
-                    secondaryBounds.top
-                )
-
                 // Measurements above and top
                 val drawnVerticalLines = drawVerticalMeasureLines(primaryBounds, secondaryBounds)
                 drawnVerticalLines.forEach { (fromPoint, toPoint) ->
