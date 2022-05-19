@@ -16,6 +16,12 @@ val adb : String
         ?: System.getenv("ADB") // This seems to never work which is unfortunate...
         ?: "adb" // Try get adb defined in env or else just hope plain adb will work
 
+data class LayoutContentResult(
+    val screenshotBitmap: Result<ImageBitmap>? = null,
+    val rootNode: Result<ViewNode>? = null,
+    val pixelsPerDp: Result<Float>? = null,
+)
+
 suspend fun screenshot(): ImageBitmap {
     println("Taking screenshot")
     withContext(Dispatchers.IO) {

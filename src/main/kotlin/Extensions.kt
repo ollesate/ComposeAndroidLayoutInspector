@@ -1,5 +1,13 @@
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -36,12 +44,12 @@ fun String.execute2(): String {
 }
 
 fun File.toBitmap() = org.jetbrains.skia.Image.makeFromEncoded(readBytes()).toComposeImageBitmap()
-fun <T>guardNonNull(
-    vararg values: T?,
-    block: (List<T>) -> Unit
-) {
-    values.toList().filterNotNull().takeIf { it.size == values.size }?.also(block)
-}
+
+fun <T, B>guardNonNull(
+    value1: T?,
+    value2: B?,
+    block: (Pair<T, B>) -> Unit
+) = value1?.let { value2?.let { block(value1 to value2) } }
 
 operator fun File.setValue(nothing: Nothing?, property: KProperty<*>, value: String?) {
     createNewFile()
@@ -53,4 +61,11 @@ operator fun File.getValue(nothing: Nothing?, property: KProperty<*>): String? {
         return null
     }
     return readText().takeUnless { it.isEmpty() }
+}
+
+fun <T> emitOnceFlow(block: suspend () -> T): Flow<T?> = channelFlow {
+    send(null)
+    launch(Dispatchers.IO) {
+        send(block())
+    }
 }

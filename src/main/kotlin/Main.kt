@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -15,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -28,9 +26,6 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.jetbrains.skia.svg.SVGTag
-import org.jetbrains.skiko.SystemTheme
-import org.jetbrains.skiko.currentSystemTheme
 
 fun main(
     args: Array<String>
@@ -134,19 +129,6 @@ class DeviceViewModel(
     }
 }
 
-fun <T> emitOnceFlow(block: suspend () -> T): Flow<T?> = channelFlow {
-    send(null)
-    launch(Dispatchers.IO) {
-        send(block())
-    }
-}
-
-data class LayoutContentResult(
-    val screenshotBitmap: Result<ImageBitmap>? = null,
-    val rootNode: Result<ViewNode>? = null,
-    val pixelsPerDp: Result<Float>? = null,
-)
-
 @Composable
 @Preview
 fun App(
@@ -164,71 +146,8 @@ fun App(
                 bitmap = content.screenshotBitmap?.getOrNull(),
             ) {
                 if (devices?.isFailure == true) {
-                    // When devices fail to load it's usually som adb problems, probably using different adb's and thus
-                    // they force each other to kill the adb server.
-                    Column(Modifier.align(Alignment.TopCenter).padding(124.dp)) {
-                        Text(
-                            "Failed to load devices: ${devices.exceptionOrNull()?.message}",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            modifier = Modifier.clickable {
-
-                            }
-                        )
-
-                        if (devices.exceptionOrNull()?.message.orEmpty().contains("doesn't match this client")) {
-                            Text(
-                                """
-                                Looks like there are conflicting adb's causing an issue. This program tries to run:
-                                ${adb.takeUnless { it == "adb" } ?: "which adb".execute()}
-                                This might be different from what you would normally use? Try run 'which adb' in a terminal.
-                                Make sure your adb's don't differ. 
-                                You can change the adb you'd like this program to use in text field below
-                                """.trimIndent(),
-                                color = Color.Red,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-
-                            Row(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp)) {
-                                var textFieldValue by remember { mutableStateOf("") }
-                                OutlinedTextField(
-                                    value = textFieldValue,
-                                    singleLine = true,
-                                    modifier = Modifier.defaultMinSize(minWidth = 200.dp, minHeight = 1.dp),
-                                    onValueChange = {
-                                        textFieldValue = it
-                                    },
-                                    textStyle = TextStyle.Default,
-                                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                                        cursorColor = Color.White,
-                                        textColor = Color.White,
-                                        unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
-                                        focusedBorderColor = Color.White
-                                    )
-                                )
-                                OutlinedButton(
-                                    onClick = {
-                                        adbOverride = textFieldValue.trim()
-                                        onForceReload()
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.CenterVertically),
-                                ) {
-                                    Text("Set")
-                                }
-                            }
-                        }
-
-                        Button(
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            onClick = {
-                                onForceReload()
-                            }
-                        ) {
-                            Text("Reload")
-                        }
-                    }
+                    // When devices fail to load it's usually som adb problems, probably using different adb's
+                    DevicesFailedView(devices, onForceReload)
                     return@ImageContainerView
                 }
 
@@ -243,41 +162,11 @@ fun App(
                         pixelsPerDp = pixelsPerDp
                     )
                 } else {
-                    loadingView(content)
+                    contentLoadingView(content)
                 }
 
-                val devices = devices?.getOrNull()?.takeIf { it.isNotEmpty() } ?: return@ImageContainerView
-
-                Row(
-                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min)
-                ) {
-                    devices.forEachIndexed { index, device ->
-                        if (index > 0) {
-                            Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))
-                        }
-
-                        Text(
-                            text = device.name,
-                            modifier = Modifier
-                                .clip(
-                                    if (devices.size == 1) {
-                                        RoundedCornerShape(16.dp)
-                                    } else {
-                                        when (index) {
-                                            0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
-                                            devices.lastIndex -> RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
-                                            else -> RoundedCornerShape(0.dp)
-                                        }
-                                    }
-                                )
-                                .background(Color.Blue.takeIf { selectedDevice == device } ?: Color.Black)
-                                .padding(6.dp)
-                                .clickable {
-                                    onDeviceSelected(device)
-                                },
-                            color = Color.White,
-                        )
-                    }
+                devices?.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                    DevicesTopButtons(it, selectedDevice, onDeviceSelected)
                 }
             }
         }
@@ -285,7 +174,116 @@ fun App(
 }
 
 @Composable
-private fun BoxScope.loadingView(content: LayoutContentResult) {
+private fun BoxScope.DevicesTopButtons(
+    devices: List<Device>,
+    selectedDevice: Device?,
+    onDeviceSelected: (Device) -> Unit
+) {
+    Row(
+        Modifier.Companion.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min)
+    ) {
+        devices.forEachIndexed { index, device ->
+            if (index > 0) {
+                Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))
+            }
+
+            Text(
+                text = device.name,
+                modifier = Modifier
+                    .clip(
+                        if (devices.size == 1) {
+                            RoundedCornerShape(16.dp)
+                        } else {
+                            when (index) {
+                                0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+                                devices.lastIndex -> RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                                else -> RoundedCornerShape(0.dp)
+                            }
+                        }
+                    )
+                    .background(Color.Blue.takeIf { selectedDevice == device } ?: Color.Black)
+                    .padding(6.dp)
+                    .clickable {
+                        onDeviceSelected(device)
+                    },
+                color = Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.DevicesFailedView(
+    devices: Result<List<Device>>,
+    onForceReload: () -> Unit
+) {
+    Column(Modifier.Companion.align(Alignment.TopCenter).padding(124.dp)) {
+        Text(
+            "Failed to load devices: ${devices.exceptionOrNull()?.message}",
+            color = Color.White,
+            fontSize = 12.sp,
+            modifier = Modifier.clickable {
+
+            }
+        )
+
+        if (devices.exceptionOrNull()?.message.orEmpty().contains("doesn't match this client")) {
+            Text(
+                """
+                Looks like there are conflicting adb's causing an issue. This program tries to run:
+                ${adb.takeUnless { it == "adb" } ?: "which adb".execute()}
+                This might be different from what you would normally use? Try run 'which adb' in a terminal.
+                Make sure your adb's don't differ. 
+                You can change the adb you'd like this program to use in text field below
+                """.trimIndent(),
+                color = Color.Red,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Row(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp)) {
+                var textFieldValue by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = textFieldValue,
+                    singleLine = true,
+                    modifier = Modifier.defaultMinSize(minWidth = 200.dp, minHeight = 1.dp),
+                    onValueChange = {
+                        textFieldValue = it
+                    },
+                    textStyle = TextStyle.Default,
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        cursorColor = Color.White,
+                        textColor = Color.White,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
+                        focusedBorderColor = Color.White
+                    )
+                )
+                OutlinedButton(
+                    onClick = {
+                        adbOverride = textFieldValue.trim()
+                        onForceReload()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically),
+                ) {
+                    Text("Set")
+                }
+            }
+        }
+
+        Button(
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            onClick = {
+                onForceReload()
+            }
+        ) {
+            Text("Reload")
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.contentLoadingView(content: LayoutContentResult) {
     Box(Modifier.matchParentSize().background(Color.White.copy(alpha = 0.3f))) {
         Column(
             Modifier
