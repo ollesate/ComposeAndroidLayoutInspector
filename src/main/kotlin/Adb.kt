@@ -2,44 +2,19 @@ import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.*
 import java.io.File
 
-data class LayoutDump(
-    val screenshotPath: String,
-    val layoutPath: String,
-    val pixelsPerDp: Float
-)
-
 const val SCREENSHOT_PATH = "/tmp/screencap.png"
 const val LAYOUT_DUMP_PATH = "/tmp/window_dump.xml"
-val outputFiles = arrayOf("/tmp/screencap.png", "/tmp/window_dump.xml")
+
+val configFile = File(System.getProperty("user.home") + File.separator + ".ComposeAndroidLayoutInspector")
+
+// For me, I have different adb when I run `which adb` and `sudo which adb`. Since the program runs in sudo if it is
+// opened by the window manager (not terminal) this override will help users to change the adb this program uses.
+var adbOverride: String? by configFile
 
 val adb : String
-    get() = System.getenv("ADB") ?: "adb" // Try get adb defined in env or else just hope plain adb will work
-
-fun screenDump(): LayoutDump {
-    val (screenshotPath, layoutPath) = outputFiles
-
-    "$adb devices".execute()
-
-    println("Taking screenshot")
-    "$adb shell screencap -p > $screenshotPath".execute()
-
-    println("Dump layout")
-    "$adb shell uiautomator dump && adb pull /sdcard/window_dump.xml $layoutPath".execute()
-
-
-    val density = "[0-9]+".toRegex().find(
-        "$adb shell wm density".execute()
-    )?.value ?: error("No density found")
-
-    println("Density" + density)
-
-
-    return LayoutDump(
-        screenshotPath = screenshotPath,
-        layoutPath = layoutPath,
-        pixelsPerDp = density.toInt() / 160f
-    )
-}
+    get() = adbOverride
+        ?: System.getenv("ADB") // This seems to never work which is unfortunate...
+        ?: "adb" // Try get adb defined in env or else just hope plain adb will work
 
 suspend fun screenshot(): ImageBitmap {
     println("Taking screenshot")
@@ -54,7 +29,7 @@ suspend fun screenshot(): ImageBitmap {
 suspend fun getLayout(): ViewNode {
     println("Dump layout")
     withContext(Dispatchers.IO) {
-        "$adb shell uiautomator dump && adb pull /sdcard/window_dump.xml $LAYOUT_DUMP_PATH".execute()
+        "$adb shell uiautomator dump && $adb pull /sdcard/window_dump.xml $LAYOUT_DUMP_PATH".execute()
     }
     return createRootNode(LAYOUT_DUMP_PATH).also {
         File(LAYOUT_DUMP_PATH).delete()
@@ -73,7 +48,7 @@ data class Device(
     val name: String
 )
 
-suspend fun devices() = "adb devices".execute()
+suspend fun devices() = "$adb devices".execute()
     .substringAfter("List of devices attached")
     .trim()
     .split("\n")

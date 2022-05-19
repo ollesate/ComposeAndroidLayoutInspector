@@ -3,6 +3,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import kotlin.reflect.KProperty
 
 fun String.findMatches(regex: String) = regex.toRegex()
     .findAll(this)
@@ -40,4 +41,16 @@ fun <T>guardNonNull(
     block: (List<T>) -> Unit
 ) {
     values.toList().filterNotNull().takeIf { it.size == values.size }?.also(block)
+}
+
+operator fun File.setValue(nothing: Nothing?, property: KProperty<*>, value: String?) {
+    createNewFile()
+    writeText(value.orEmpty())
+}
+
+operator fun File.getValue(nothing: Nothing?, property: KProperty<*>): String? {
+    if (!exists()) {
+        return null
+    }
+    return readText().takeUnless { it.isEmpty() }
 }

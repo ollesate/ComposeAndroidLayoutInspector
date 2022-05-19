@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -20,12 +21,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.jetbrains.skia.svg.SVGTag
+import org.jetbrains.skiko.SystemTheme
+import org.jetbrains.skiko.currentSystemTheme
 
 fun main(
     args: Array<String>
@@ -64,7 +69,10 @@ fun main(
             content = content,
             devices = devices,
             selectedDevice = selectedDevice,
-            onDeviceSelected = viewModel::selectDevice
+            onDeviceSelected = viewModel::selectDevice,
+            onForceReload = {
+                viewModel.load()
+            }
         )
     }
 }
@@ -145,7 +153,8 @@ fun App(
     content: LayoutContentResult,
     devices: Result<List<Device>>?,
     selectedDevice: Device?,
-    onDeviceSelected: (Device) -> Unit
+    onDeviceSelected: (Device) -> Unit,
+    onForceReload: () -> Unit,
 ) {
     // rootNode.prettyPrint()
 
@@ -154,6 +163,74 @@ fun App(
             ImageContainerView(
                 bitmap = content.screenshotBitmap?.getOrNull(),
             ) {
+                if (devices?.isFailure == true) {
+                    // When devices fail to load it's usually som adb problems, probably using different adb's and thus
+                    // they force each other to kill the adb server.
+                    Column(Modifier.align(Alignment.TopCenter).padding(124.dp)) {
+                        Text(
+                            "Failed to load devices: ${devices.exceptionOrNull()?.message}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.clickable {
+
+                            }
+                        )
+
+                        if (devices.exceptionOrNull()?.message.orEmpty().contains("doesn't match this client")) {
+                            Text(
+                                """
+                                Looks like there are conflicting adb's causing an issue. This program tries to run:
+                                ${adb.takeUnless { it == "adb" } ?: "which adb".execute()}
+                                This might be different from what you would normally use? Try run 'which adb' in a terminal.
+                                Make sure your adb's don't differ. 
+                                You can change the adb you'd like this program to use in text field below
+                                """.trimIndent(),
+                                color = Color.Red,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            Row(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp)) {
+                                var textFieldValue by remember { mutableStateOf("") }
+                                OutlinedTextField(
+                                    value = textFieldValue,
+                                    singleLine = true,
+                                    modifier = Modifier.defaultMinSize(minWidth = 200.dp, minHeight = 1.dp),
+                                    onValueChange = {
+                                        textFieldValue = it
+                                    },
+                                    textStyle = TextStyle.Default,
+                                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                                        cursorColor = Color.White,
+                                        textColor = Color.White,
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
+                                        focusedBorderColor = Color.White
+                                    )
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        adbOverride = textFieldValue.trim()
+                                        onForceReload()
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterVertically),
+                                ) {
+                                    Text("Set")
+                                }
+                            }
+                        }
+
+                        Button(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            onClick = {
+                                onForceReload()
+                            }
+                        ) {
+                            Text("Reload")
+                        }
+                    }
+                    return@ImageContainerView
+                }
 
                 val rootNode = content.rootNode?.getOrNull()
                 val screenshotBitmap = content.screenshotBitmap?.getOrNull()
@@ -167,11 +244,6 @@ fun App(
                     )
                 } else {
                     loadingView(content)
-                }
-
-                if (devices?.isFailure == true) {
-                    Text("Failed to load devices")
-                    return@ImageContainerView
                 }
 
                 val devices = devices?.getOrNull()?.takeIf { it.isNotEmpty() } ?: return@ImageContainerView
