@@ -65,8 +65,8 @@ fun ImageContainerScope.SelectableLayoutOverlay(
     ) {
         val realSize = size.div(scale)
 
-        scaledScope(
-            scale,
+        scale(
+            scale = scale,
             pivot = Offset.Zero
         ) {
             // Draw debug outlines
@@ -264,7 +264,7 @@ private operator fun Size.minus(size: Size): Size {
 
 typealias Line = Pair<Offset, Offset>
 
-private fun ScaledDrawScope.drawVerticalMeasureLines(
+private fun DrawScope.drawVerticalMeasureLines(
     primaryBounds: Rect,
     secondaryBounds: Rect
 ) : List<Line> {
@@ -304,7 +304,7 @@ private fun ScaledDrawScope.drawVerticalMeasureLines(
         }
 }
 
-private fun ScaledDrawScope.drawHorizontalMeasureLines(
+private fun DrawScope.drawHorizontalMeasureLines(
     primaryBounds: Rect,
     secondaryBounds: Rect
 ) : List<Line> {
@@ -344,7 +344,7 @@ private fun ScaledDrawScope.drawHorizontalMeasureLines(
         }
 }
 
-private fun ScaledDrawScope.drawMeasureLine(from: Offset, to: Offset) {
+private fun DrawScope.drawMeasureLine(from: Offset, to: Offset) {
     drawLine(Color.Blue, from, to, strokeWidth = 3f)
 }
 
@@ -396,26 +396,10 @@ fun DrawScope.drawNodeOutline(
     )
 }
 
-fun ScaledDrawScope.drawGuideline(from: Offset, to: Offset) = drawLine(
+fun DrawScope.drawGuideline(from: Offset, to: Offset) = drawLine(
     Color.Red.copy(alpha = 0.45f),
     from,
     to,
     strokeWidth = 6f,
     pathEffect = PathEffect.dashPathEffect(floatArrayOf(40f, 20f))
 )
-
-fun DrawScope.scaledScope(
-    scale: Float,
-    pivot: Offset = Offset.Zero,
-    block: ScaledDrawScope.() -> Unit
-) = scale(scale, pivot) {
-    ScaledDrawScope(scale, this).also(block)
-}
-
-class ScaledDrawScope(
-    private val scale: Float,
-    drawScope: DrawScope
-) : DrawScope by drawScope {
-    val realSize: Size
-        get() = size.div(scale)
-}
