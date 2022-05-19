@@ -1,15 +1,12 @@
-@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalCoroutinesApi::class)
+@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalCoroutinesApi::class, FlowPreview::class)
 
-import androidx.compose.material.MaterialTheme
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Icon
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -34,16 +31,13 @@ fun main(
     args: Array<String>
 ) = application {
 
-    runBlocking {
-        println(devices())
-    }
-
     val initialWindowSize = DpSize(
         1000.dp,
         1920.dp
     ).div(2f)
 
-    val onRefreshSignal = Signal<Unit>()
+    val scope = rememberCoroutineScope()
+    val viewModel = DeviceViewModel(scope)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -53,63 +47,89 @@ fun main(
         title = "Layout inspector",
         onKeyEvent = {
             if (it.isCtrlPressed && it.key == Key.R && it.type == KeyEventType.KeyUp) {
-                onRefreshSignal(Unit)
+                viewModel.load()
             }
             true
         }
     ) {
-        var content: LayoutContentResult by remember {
-            mutableStateOf(LayoutContentResult())
-        }
-
-        var devices: List<Device>? by remember { mutableStateOf(null) }
-
-        var selectedDevice: Device? by remember {
-            mutableStateOf(null)
-        }
-
-        val scope = rememberCoroutineScope()
-
-        fun refresh() = scope.launch {
-            combine(
-                suspendFlow { kotlin.runCatching { screenshot() } },
-                suspendFlow { kotlin.runCatching { getLayout() } },
-                suspendFlow { kotlin.runCatching { getPixelsPerDp() } },
-            ) { imageBitmap, viewNode, pixelsPerDp ->
-                content = LayoutContentResult(
-                    screenshotBitmap = imageBitmap,
-                    rootNode = viewNode,
-                    pixelsPerDp = pixelsPerDp,
-                )
-            }.collect()
-        }
+        val selectedDevice by viewModel.selectedDevice.collectAsState(null)
+        val devices by viewModel.devices.collectAsState(null)
+        val content by viewModel.layoutContent.collectAsState(LayoutContentResult())
 
         LaunchedEffect(Unit) {
-            val loadedDevices = devices()
-            devices = loadedDevices
-            selectedDevice = loadedDevices.firstOrNull()?.also { it.select() }
-            onRefreshSignal {
-                refresh()
-            }
-            refresh()
+            viewModel.load()
         }
 
         App(
             content = content,
             devices = devices,
             selectedDevice = selectedDevice,
-            onDeviceSelected = {
-                selectedDevice = it
-                it.select()
-                refresh()
-            }
+            onDeviceSelected = viewModel::selectDevice
         )
     }
 }
 
-fun <T>CoroutineScope.suspendFlow(block: suspend () -> T): Flow<T?> = MutableStateFlow<T?>(null).apply {
+class DeviceViewModel(
+    private val coroutineScope: CoroutineScope
+) {
+    val devices = MutableStateFlow<Result<List<Device>>?>(null)
+    val selectedDevice = MutableSharedFlow<Device?>()
+    val layoutContent = selectedDevice.filterNotNull().flatMapConcat {
+        combine(
+            emitOnceFlow { kotlin.runCatching { screenshot() } },
+            emitOnceFlow { kotlin.runCatching { getLayout() } },
+            emitOnceFlow { kotlin.runCatching { getPixelsPerDp() } },
+        ) { imageBitmap, viewNode, pixelsPerDp ->
+            LayoutContentResult(
+                screenshotBitmap = imageBitmap,
+                rootNode = viewNode,
+                pixelsPerDp = pixelsPerDp,
+            )
+        }
+    }
+
+    // Required to create this extra variable since mutable shared flow do not allow me to access the current item.
+    // The reason I couldn't use a normal state flow is because that is considered cold flow and doesn't trigger if I
+    // send the same device again which I want because I want it to refresh if you click already selected device
+    private var previousDevice: Device? = null
+
+    init {
+        coroutineScope.launch {
+            selectedDevice.collect {
+                previousDevice = it
+            }
+        }
+    }
+
+    fun selectDevice(device: Device) {
+        device.select()
+        coroutineScope.launch {
+            selectedDevice.emit(
+                device
+            )
+        }
+    }
+
+    fun load() {
+        coroutineScope.launch {
+            devices.value = kotlin.runCatching { devices() }
+
+            val devices = devices.value?.getOrNull().orEmpty()
+
+            val newSelectedDevice = previousDevice.takeIf { devices.contains(previousDevice) }
+                ?: devices.firstOrNull()
+
+            newSelectedDevice?.select()
+
+            selectedDevice.emit(newSelectedDevice)
+        }
+    }
+}
+
+fun <T> emitOnceFlow(block: suspend () -> T): Flow<T?> = channelFlow {
+    send(null)
     launch(Dispatchers.IO) {
-        value = block()
+        send(block())
     }
 }
 
@@ -123,7 +143,7 @@ data class LayoutContentResult(
 @Preview
 fun App(
     content: LayoutContentResult,
-    devices: List<Device>?,
+    devices: Result<List<Device>>?,
     selectedDevice: Device?,
     onDeviceSelected: (Device) -> Unit
 ) {
@@ -149,39 +169,42 @@ fun App(
                     loadingView(content)
                 }
 
-                devices ?: return@ImageContainerView
+                if (devices?.isFailure == true) {
+                    Text("Failed to load devices")
+                    return@ImageContainerView
+                }
+
+                val devices = devices?.getOrNull()?.takeIf { it.isNotEmpty() } ?: return@ImageContainerView
 
                 Row(
-                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min).alpha(0.7f)
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(IntrinsicSize.Min)
                 ) {
-                    if (devices.isNotEmpty()) {
-                        devices.forEachIndexed { index, device ->
-                            if (index > 0) {
-                                Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))
-                            }
-
-                            Text(
-                                text = device.name,
-                                modifier = Modifier
-                                    .clip(
-                                        if (devices.size == 1) {
-                                            RoundedCornerShape(16.dp)
-                                        } else {
-                                            when (index) {
-                                                0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
-                                                devices.lastIndex -> RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
-                                                else -> RoundedCornerShape(0.dp)
-                                            }
-                                        }
-                                    )
-                                    .background(Color.Blue.takeIf { selectedDevice == device } ?: Color.Black)
-                                    .padding(6.dp)
-                                    .clickable {
-                                        onDeviceSelected(device)
-                                    },
-                                color = Color.White,
-                            )
+                    devices.forEachIndexed { index, device ->
+                        if (index > 0) {
+                            Spacer(Modifier.width(1.dp).fillMaxHeight().background(Color.White))
                         }
+
+                        Text(
+                            text = device.name,
+                            modifier = Modifier
+                                .clip(
+                                    if (devices.size == 1) {
+                                        RoundedCornerShape(16.dp)
+                                    } else {
+                                        when (index) {
+                                            0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+                                            devices.lastIndex -> RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                                            else -> RoundedCornerShape(0.dp)
+                                        }
+                                    }
+                                )
+                                .background(Color.Blue.takeIf { selectedDevice == device } ?: Color.Black)
+                                .padding(6.dp)
+                                .clickable {
+                                    onDeviceSelected(device)
+                                },
+                            color = Color.White,
+                        )
                     }
                 }
             }
