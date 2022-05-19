@@ -289,13 +289,6 @@ private fun ScaledDrawScope.drawVerticalMeasureLines(
             }
         }
     }
-//
-//    lines.forEach { (from, to) ->
-//        val x = if (primaryBounds.center.x in secondaryBounds.left..secondaryBounds.right) {
-//            primaryBounds.center.x
-//        } else secondaryBounds.center.x
-//        drawLine(Color.Blue, from.copy(x = x), to.copy(x = x))
-//    }
 
     return lines
         .map { (from, to) ->
@@ -365,12 +358,6 @@ private fun Line.horizontalDistance() : Float {
     return abs(pointA.x - pointB.x)
 }
 
-private val Line.startX : Float
-    get() = min(first.x, second.x)
-
-private val Line.startY : Float
-    get() = min(first.y, second.y)
-
 private fun Line.intersects(line2: Line) : Boolean {
     return this.toRect().overlaps(line2.toRect())
 }
@@ -392,91 +379,7 @@ private fun Line.toRect(): Rect {
         topLeft = topLeft,
         bottomRight = bottomRight
     ).let {
-        // Here we check that neither width nor height is 0 or else they're not going to intersect anything
-        val delta = 2f
-//        if (it.width == 0f) {
-//            return@let it.copy(left = it.left - delta, right = it.right + delta)
-//        }
-//        if (it.height == 0f) {
-//            return@let it.copy(top = it.top - delta, bottom = it.bottom + delta)
-//        }
-        return@let it.inflate(delta) // Make the box a bit bigger, so we filter out some lines or else we can end up with 3 measure lines cluttering
-    }
-}
-
-private infix fun Float.between(other: Pair<Float, Float>): Boolean {
-    return this > other.first && this < other.second
-}
-
-private fun ScaledDrawScope.drawVerticalMeasureLine(
-    from: Offset,
-    to: Offset
-) {
-
-}
-
-
-private fun ScaledDrawScope.drawMeasureLineUp(
-    primaryBounds: Rect,
-    secondaryBounds: Rect
-) {
-    val from = primaryBounds.topCenter
-    val to = listOf(
-        secondaryBounds.bottomCenter, // Pick the bottom if its above
-        secondaryBounds.topCenter // Else check if top is above
-    ).filter { it.y < from.y }.minByOrNull { abs(from.y - it.y) } ?: return
-    if (primaryBounds.center.x.toInt() in secondaryBounds.left.toInt() until secondaryBounds.right.toInt()) {
-        drawLine(Color.Blue, from, to.copy(x = from.x))
-    } else {
-        drawLine(Color.Blue, from.copy(x = to.x), to)
-    }
-}
-
-private fun ScaledDrawScope.drawMeasureLineDown(
-    primaryBounds: Rect,
-    secondaryBounds: Rect
-) {
-    val from = primaryBounds.bottomCenter
-    val to = listOf(
-        secondaryBounds.bottomCenter,
-        secondaryBounds.topCenter
-    ).filter { it.y > from.y }.minByOrNull { abs(from.y - it.y) } ?: return
-    if (primaryBounds.center.x.toInt() in secondaryBounds.left.toInt() until secondaryBounds.right.toInt()) {
-        drawLine(Color.Blue, from, to.copy(x = from.x))
-    } else {
-        drawLine(Color.Blue, from.copy(x = to.x), to)
-    }
-}
-
-private fun ScaledDrawScope.drawMeasureLineLeft(
-    primaryBounds: Rect,
-    secondaryBounds: Rect
-) {
-    val from = primaryBounds.centerLeft
-    val to = listOf(
-        secondaryBounds.centerLeft,
-        secondaryBounds.centerRight
-    ).filter { it.x < from.x }.minByOrNull { abs(from.x - it.x) } ?: return
-    if (primaryBounds.center.y.toInt() in secondaryBounds.top.toInt() until secondaryBounds.bottom.toInt()) {
-        drawLine(Color.Blue, from, to.copy(y = from.y))
-    } else {
-        drawLine(Color.Blue, from.copy(y = to.y), to)
-    }
-}
-
-private fun ScaledDrawScope.drawMeasureLineRight(
-    primaryBounds: Rect,
-    secondaryBounds: Rect
-) {
-    val from = primaryBounds.centerRight
-    val to = listOf(
-        secondaryBounds.centerLeft,
-        secondaryBounds.centerRight
-    ).filter { it.x > from.x }.minByOrNull { abs(from.x - it.x) } ?: return
-    if (primaryBounds.center.y.toInt() in secondaryBounds.top.toInt() until secondaryBounds.bottom.toInt()) {
-        drawLine(Color.Blue, from, to.copy(y = from.y))
-    } else {
-        drawLine(Color.Blue, from.copy(y = to.y), to)
+        return@let it.inflate(2f) // Make the box a bit bigger, so we filter out some lines or else we can end up with 3 measure lines cluttering
     }
 }
 
