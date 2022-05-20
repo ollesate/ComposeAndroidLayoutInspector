@@ -12,7 +12,7 @@ val configFile = File(System.getProperty("user.home") + File.separator + ".Compo
 var adbOverride: String? by configFile
 
 val adb : String
-    get() = adbOverride
+    get() = adbOverride?.trim()
         ?: System.getenv("ADB") // This seems to never work which is unfortunate...
         ?: "adb" // Try get adb defined in env or else just hope plain adb will work
 

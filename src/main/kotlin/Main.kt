@@ -250,15 +250,24 @@ private fun BoxScope.DevicesFailedView(
             fontSize = 12.sp,
         )
 
-        if (devices.exceptionOrNull()?.message.orEmpty().contains("doesn't match this client")) {
+        val message = devices.exceptionOrNull()?.message.orEmpty()
+        val adbNotConfiguredMessage = if (message.contains("doesn't match this client")) {
+            """
+            Looks like there are conflicting adb's causing an issue. This program tries to run:
+            ${adb.takeUnless { it == "adb" } ?: "which adb".execute()}
+            This might be different from what you would normally use? Try run 'which adb' in a terminal.
+            Insert the path you found in text field below. It will be used by program.
+            """.trimIndent()
+        } else if (message.contains("command not found")) {
+            """
+            Wasn't able to find adb. Make sure it is installed. Run 'which adb' in your terminal to see its location.
+            If you do find adb take that path and insert it in text field below. It will be used by program.
+            """.trimIndent()
+        } else null
+
+        if (adbNotConfiguredMessage != null) {
             Text(
-                """
-                Looks like there are conflicting adb's causing an issue. This program tries to run:
-                ${adb.takeUnless { it == "adb" } ?: "which adb".execute()}
-                This might be different from what you would normally use? Try run 'which adb' in a terminal.
-                Make sure your adb's don't differ. 
-                You can change the adb you'd like this program to use in text field below
-                """.trimIndent(),
+                text = adbNotConfiguredMessage,
                 color = Color.Red,
                 fontSize = 16.sp,
                 modifier = Modifier.padding(top = 8.dp)
