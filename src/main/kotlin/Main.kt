@@ -243,7 +243,7 @@ private fun BoxScope.DevicesFailedView(
     devices: Result<List<Device>>,
     onForceReload: () -> Unit
 ) {
-    Column(Modifier.Companion.align(Alignment.TopCenter).padding(124.dp)) {
+    Column(Modifier.Companion.align(Alignment.TopCenter).padding(top = 124.dp, start = 16.dp, end = 16.dp)) {
         Text(
             "Failed to load devices: ${devices.exceptionOrNull()?.message}",
             color = Color.White,
