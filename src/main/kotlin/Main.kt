@@ -151,26 +151,52 @@ fun App(
                     return@ImageContainerView
                 }
 
-                val rootNode = content.rootNode?.getOrNull()
-                val screenshotBitmap = content.screenshotBitmap?.getOrNull()
-                val pixelsPerDp = content.pixelsPerDp?.getOrNull()
-
-                if (rootNode != null && screenshotBitmap != null && pixelsPerDp != null) {
-                    SelectableLayoutOverlay(
-                        realImageSize = IntSize(screenshotBitmap.width, screenshotBitmap.height),
-                        rootNode = rootNode,
-                        pixelsPerDp = pixelsPerDp
-                    )
+                if (devices?.isSuccess == true && devices.getOrNull().orEmpty().isEmpty()) {
+                    noConnectedDevicesView(onForceReload)
                 } else {
-                    contentLoadingView(content)
-                }
 
-                devices?.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
-                    DevicesTopButtons(it, selectedDevice, onDeviceSelected)
+                    val rootNode = content.rootNode?.getOrNull()
+                    val screenshotBitmap = content.screenshotBitmap?.getOrNull()
+                    val pixelsPerDp = content.pixelsPerDp?.getOrNull()
+
+                    if (rootNode != null && screenshotBitmap != null && pixelsPerDp != null) {
+                        SelectableLayoutOverlay(
+                            realImageSize = IntSize(screenshotBitmap.width, screenshotBitmap.height),
+                            rootNode = rootNode,
+                            pixelsPerDp = pixelsPerDp
+                        )
+                    } else {
+                        contentLoadingView(content)
+                    }
+
+                    devices?.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                        DevicesTopButtons(it, selectedDevice, onDeviceSelected)
+                    }
                 }
             }
         }
     )
+}
+
+@Composable
+private fun BoxScope.noConnectedDevicesView(onForceReload: () -> Unit) {
+    Column(
+        modifier = Modifier.Companion.align(Alignment.Center),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "No devices connected",
+            color = Color.White,
+            modifier = Modifier.padding(16.dp)
+        )
+        Button(
+            onClick = {
+                onForceReload()
+            }
+        ) {
+            Text("Refresh")
+        }
+    }
 }
 
 @Composable
@@ -222,9 +248,6 @@ private fun BoxScope.DevicesFailedView(
             "Failed to load devices: ${devices.exceptionOrNull()?.message}",
             color = Color.White,
             fontSize = 12.sp,
-            modifier = Modifier.clickable {
-
-            }
         )
 
         if (devices.exceptionOrNull()?.message.orEmpty().contains("doesn't match this client")) {
