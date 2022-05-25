@@ -2,37 +2,32 @@
 
 Compose desktop application for viewing layouts and measure distance between views. 
 
-Uses adb commands under the hood `adb shell screencap` for screenshots and `adb shell uiautomator dump` for layout.
+- Launches standalone application that connects to device via adb
+- Supports multiple devices being connected at the same time
+- Shows width and height as well as class and resource if single view is selected
+- Shows distance if two views are selected
+
+<img src="pictures/showcase1.png" width=200 /><img src="pictures/showcase2.png" width=200 />
+<img src="pictures/showcase3.png" width=200 /><img src="pictures/showcase4.png" width=200 />
 
 ## Getting started
 
 ### Requirements
+Adb installed
 
-- Adb installed
-- Java 11 to run
-- Java 15 to package an installable
+### Installing
 
-### Running the application locally
+See [releases](https://github.com/ollesate/ComposeAndroidLayoutInspector/releases)
+
+### Running locally
+
+To run program locally requires java 11
 
 ```bash
 ./gradlew run
 ```
 
-### Installing
-
-```bash
-./gradlew package
-```
-
-You'll get an installation file depending on what OS you are running.
-
-For linux install via `dpkg -i`.
-
-For mac just open the dmg file.
-
-The app will be installed as ComposeAndroidLayoutInspector. 
-
-## Known issues
+## Known issues with application
 
 ### Failed to get devices
 
