@@ -34,9 +34,19 @@ suspend fun screenshot(): ImageBitmap {
 
 suspend fun getLayout(): ViewNode {
     println("Dump layout")
+    File(LAYOUT_DUMP_PATH).delete()
     withContext(Dispatchers.IO) {
-        "$adb shell uiautomator dump && $adb pull /sdcard/window_dump.xml $LAYOUT_DUMP_PATH".execute()
+        try {
+            "$adb shell uiautomator dump && $adb pull /sdcard/window_dump.xml $LAYOUT_DUMP_PATH".execute()
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
     }
+
+    if (!File(LAYOUT_DUMP_PATH).exists()) {
+        error("Failed to create layout")
+    }
+
     return createRootNode(LAYOUT_DUMP_PATH).also {
         File(LAYOUT_DUMP_PATH).delete()
     }
